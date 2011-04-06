@@ -1,0 +1,37 @@
+0.3
+
+- changed name due to trademark issues
+- added skip groups to speed parsing
+- added cron-style specs instead of time periods
+- added ability to send to multiple recipients, suggested by:
+	Marc Doumayrou <doud@rhoas.net>
+- added solaris init file from Marc Doumayrou <doud@rhoas.net>
+- added logprefix option to handle non-syslog logs
+- added status messages
+- added log files perms check
+- fixed strftime portability issue, thanks goes to 
+	Andrew Eason <andrew@armstrong.edu>
+
+0.2.1
+
+- fixed missing headers in smtp code
+- added hidepid feature
+- replaced expand_repeats with builtin repeat queue
+
+0.2
+
+- added multiple file support
+- big performance improvements: BerkeleyDB and Storable are no longer required
+- better signal handling including configuration reload, see tenshi.8 SIGNALS section
+- replaced 'set mda' with 'set mailserver', now reports are handled by Net::SMTP
+- added per-queue report subjects
+- added expand_repeats option to handle "last message repeated x times" nicely
+- added profiling mode  
+- 'set mask' without argument now allows an empty mask
+- pidfile is removed on shutdown
+- die if our child process dies
+- removed prescan option
+
+0.1
+
+- first public release

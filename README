@@ -1,0 +1,66 @@
+
+tenshi 0.3 README
+Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
+
+
+- What's tenshi?
+
+tenshi is a log monitoring program, designed to watch one or more log files for 
+lines matching user defined regular expressions and report on the matches. The 
+regular expressions are assigned to queues which have an alert interval and a 
+list of mail recipients.
+
+Please read the example tenshi.conf and tenshi.8 man page for usage 
+instructions.
+
+tenshi was formerly known as wasabi. The name was changed to tenshi after we
+were informed that wasabi is a registered trademark relating to another piece 
+of software.
+
+It should be noted that tenshi is basically a perl rewrite of Oak 
+(http://www.ktools.org).
+
+
+- Example output:
+
+This is a sample report from tenshi.
+
+host1: 
+    78: ipop3d: Login
+    74: ipop3d: Logout
+
+host2: 
+    30: ipop3d: Login
+    30: ipop3d: Logout
+    19: ipop3d: pop3 service init
+    12: ipop3d: pop3s SSL service init
+    1: ipop3d: Command stream end of file while reading line user=??? host=bogus.domain.net [192.168.0.1]
+    1: ipop3d: Command stream end of file, while reading authentication host=bogus1.domain.net [10.1.7.1]
+
+host3:
+    1: /usr/bin/sudo: USER=root ; COMMAND=/bin/dmesg 
+
+host4:
+    1: /usr/bin/sudo: USER=root ; COMMAND=/bin/bash
+
+host5:
+    1: ipop3d: Login failed user=admin auth=admin host=bogus1.domain.net [10.1.7.1]
+
+host6:
+    1: ipop3d: Autologout user=??? host=bogus.domain.net [192.168.0.1]
+
+
+- Requirements
+
+This program uses 'tail' which should be included in your distribution. 
+It also requires Net::SMTP module for mailing reports which should be included
+in your perl installation, otherwise you can grab it at http://www.cpan.org or 
+using the CPAN shell (`perl -e shell -MCPAN`).
+
+
+- References
+
+http://www.gentoo.org/proj/en/infrastructure/tenshi/index.xml
+http://www.gentoo.org/~lcars/tenshi
+
+Please send requests/suggestions/bug reports to <tenshi@gentoo.org>
