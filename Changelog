@@ -1,3 +1,12 @@
+0.4
+
+- added uid, gid options for setting effective UID, GID
+- added colourization of debug messages
+- added filter, filterargs options for report pre-processing
+- added [pager:]<mail_to> syntax for sending pager friendly reports
+- added mailtimeout option
+- fixed tail, tailargs incorrectly being treated as dynamic options
+
 0.3.4
 
 - added include, includedir options for parsing external configuration files
@@ -22,7 +31,7 @@
 
 0.3.1
 
-- added 'set tailargs' option
+- added tailargs option
 - fixed buggy logprefix implementation
 - fixed buggy cron */skip implementation
 - fixed broken cron specs examples
@@ -52,11 +61,11 @@
 - added multiple file support
 - big performance improvements: BerkeleyDB and Storable are no longer required
 - better signal handling including configuration reload, see tenshi.8 SIGNALS section
-- replaced 'set mda' with 'set mailserver', now reports are handled by Net::SMTP
+- replaced mda option with mailserver, now reports are handled by Net::SMTP
 - added per-queue report subjects
 - added expand_repeats option to handle "last message repeated x times" nicely
 - added profiling mode  
-- 'set mask' without argument now allows an empty mask
+- mask option without argument now allows an empty mask
 - pidfile is removed on shutdown
 - die if our child process dies
 - removed prescan option

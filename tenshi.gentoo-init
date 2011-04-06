@@ -13,7 +13,7 @@ checkconfig() {
 
 start() {
 	ebegin "Starting tenshi"
-	start-stop-daemon --start --quiet -c tenshi --exec /usr/sbin/tenshi -- -c /etc/tenshi/tenshi.conf -P /var/lib/tenshi/tenshi.pid
+	start-stop-daemon --start --quiet --exec /usr/sbin/tenshi -- -c /etc/tenshi/tenshi.conf -P /var/lib/tenshi/tenshi.pid
 	eend $?
 }
 

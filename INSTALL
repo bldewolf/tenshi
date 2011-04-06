@@ -1,8 +1,7 @@
 
 To install tenshi:
 
-Add a user and group named tenshi (or hack the Makefile and change
-tenshi_user/tenshi_group).
+Add a user and group named tenshi.
 
 As root:
 
@@ -14,8 +13,8 @@ Please Read The Fine Manual once through before running tenshi to make sure you
 understand whats going on.
 
 Copy the tenshi.<distro>-init to wherever your init scripts live. Currently we
-only have init scripts for Gentoo and Solaris but we would be very happy to
-accept init scripts for other distros.
+only have init scripts for Gentoo, Debian and Solaris but we would be very
+happy to accept init scripts for other distros.
 
 Add tenshi to whatever run levels you need it to run in.
 

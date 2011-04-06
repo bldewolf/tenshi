@@ -1,6 +1,7 @@
 
-tenshi 0.3.4 README
-Copyright 2004-2005 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@gentoo.org>
+tenshi 0.4 README
+Copyright 2004-2006 Andrea Barisani <lcars@gentoo.org> <andrea@inversepath.com>
+                and Rob Holland    <tigger@gentoo.org> <rob@inversepath.com>
 
 
 - What's tenshi?
@@ -17,50 +18,96 @@ tenshi was formerly known as wasabi. The name was changed to tenshi after we
 were informed that wasabi is a registered trademark relating to another piece 
 of software.
 
-It should be noted that tenshi is basically a perl rewrite of Oak 
+It should be noted that tenshi was initially a perl rewrite of Oak 
 (http://www.ktools.org).
 
 
-- Example output:
+- Examples:
 
-This is a sample report from tenshi.
+Consider the following settings in tenshi.conf:
 
-host1: 
-    78: ipop3d: Login
-    74: ipop3d: Logout
 
-host2: 
-    30: ipop3d: Login
-    30: ipop3d: Logout
-    19: ipop3d: pop3 service init
-    12: ipop3d: pop3s SSL service init
+set hidepid on
+
+set queue mail     tenshi@localhost sysadmin@localhost [0 */12 * * *]
+set queue misc     tenshi@localhost sysadmin@localhost [0 */24 * * *]
+set queue critical tenshi@localhost sysadmin@localhost [now]
+
+group ^ipop3d:
+
+mail ^ipop3d: Login user=(.+)
+mail ^ipop3d: Logout user=(.+)
+mail ^ipop3d: pop3s SSL service init from (.+)
+mail ^ipop3d: pop3 service init from (.+)
+mail ^ipop3d: Command stream end of file, while reading.+
+mail ^ipop3d: Command stream end of file while reading.+
+
+critical ^ipop3d: Login failed.+
+
+trash ^ipop3d:.+
+
+group_end
+
+critical ^sudo: (.+) : TTY=(.+) ; PWD=(.+) ; USER=root ; COMMAND=(.+)
+
+misc .*
+
+
+Every ipop3d message not matched by the regexps assigned to the queue mail or 
+critical will be matched by the queue trash (a builtin null queue), any other 
+message will be matched by queue misc. Fields enclosed in (.+) are masked.
+
+This is a sample report for the mail queue (sent every 12 hours): 
+
+
+host1:
+    79: ipop3d: Login user=___
+    74: ipop3d: Logout user=___
+
+host2:
+    30: ipop3d: Login user=___
+    30: ipop3d: Logout user=___
+    19: ipop3d: pop3 service init from ___
+    12: ipop3d: pop3s SSL service init from ___
     1: ipop3d: Command stream end of file while reading line user=??? host=bogus.domain.net [192.168.0.1]
     1: ipop3d: Command stream end of file, while reading authentication host=bogus1.domain.net [10.1.7.1]
 
-host3:
-    1: /usr/bin/sudo: USER=root ; COMMAND=/bin/dmesg 
 
-host4:
-    1: /usr/bin/sudo: USER=root ; COMMAND=/bin/bash
+These are sample reports for the critical queue (sent every time a message matches the regexp):
 
-host5:
+
+host1:
+    1: /usr/bin/sudo: ___ : TTY=___ ; PWD=___ ; USER=root ; COMMAND=/bin/dmesg
+
+host1:
+    1: /usr/bin/sudo: ___ : TTY=___ ; PWD=___ ; USER=root ; COMMAND=/bin/bash
+
+host2:
     1: ipop3d: Login failed user=admin auth=admin host=bogus1.domain.net [10.1.7.1]
 
-host6:
+host2:
     1: ipop3d: Autologout user=??? host=bogus.domain.net [192.168.0.1]
 
 
-- Requirements
+- Requirements:
 
-This program uses 'tail' which should be included in your distribution. 
-It also requires Net::SMTP module for mailing reports which should be included
-in your perl installation, otherwise you can grab it at http://www.cpan.org or 
-using the CPAN shell (`perl -e shell -MCPAN`).
+This program uses 'tail' which should be included in your distribution. It also 
+requires Net::SMTP module for mailing reports which should be included in your 
+perl installation, otherwise you can grab it at CPAN (http://www.cpan.org) or 
+using the CPAN shell (perl -e shell -MCPAN).
 
 
-- References
+- Resources:
 
-http://tenshi.gentoo.org
-http://www.gentoo.org/~lcars/tenshi
+The tenshi project page is http://dev.inversepath.com/trac/tenshi
 
-Please send requests/suggestions/bug reports to <tenshi@gentoo.org>
+Please report any bugs you find at http://dev.inversepath.com/trac/tenshi/report or
+<tenshi@inversepath.com>.
+
+Two mailing lists are also available:
+
+<tenshi-user@lists.inversepath.com> for general discussion, subscribe by sending a 
+message to <tenshi-user+subscribe@lists.inversepath.com> 
+
+<tenshi-announce@lists.inversepath.com> for announcements, subscribe by sending a 
+message to <tenshi-announce+subscribe@lists.inversepath.com> 

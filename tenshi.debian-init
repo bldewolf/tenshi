@@ -5,7 +5,7 @@ test -f /usr/sbin/tenshi || exit 0
 case "$1" in
   start)
 	echo -n "Starting log monitor: tenshi"
-	start-stop-daemon --start -c tenshi --exec /usr/sbin/tenshi
+	start-stop-daemon --start --exec /usr/sbin/tenshi
 	echo "."
 	;;
   stop)
@@ -24,7 +24,7 @@ case "$1" in
 	echo "."
 	sleep 1
 	echo -n "Starting log monitor: tenshi"
-	start-stop-daemon --start --quiet -c tenshi --exec /usr/sbin/tenshi 
+	start-stop-daemon --start --quiet --exec /usr/sbin/tenshi 
 	echo "."
 	;;
   *)

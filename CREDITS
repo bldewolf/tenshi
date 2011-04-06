@@ -1,16 +1,10 @@
 
-tenshi was initially written by Andrea Barisani <lcars@gentoo.org>. 
-It is now maintained by Andrea Barisani <lcars@gentoo.org> and 
-Rob Holland <tigger@gentoo.org>.
+Author and maintainer: Andrea Barisani <lcars@gentoo.org> <andrea@inversepath.com>
+Maintainer:            Rob Holland    <tigger@gentoo.org> <rob@inversepath.com>
 
 
-Thanks goes to:
+Additional thanks goes to:
 
 Robert Coie <rac@gentoo.org>
 The Gentoo Infrastructure Team
 lwithers@users.sf.net
-
-
-Please send requests/suggestions/bug reports to:
-
-    <tenshi@gentoo.org>
