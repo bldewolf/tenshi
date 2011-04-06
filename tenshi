@@ -1,9 +1,9 @@
 #!/usr/bin/perl
 #
-# tenshi 0.10 2008/03/13
+# tenshi 0.11 2009/07/19
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2008 Andrea Barisani <andrea@inversepath.com>
+# Copyright 2004-2009 Andrea Barisani <andrea@inversepath.com>
 #                     Rob Holland        <rob@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
@@ -34,7 +34,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.10';
+my $version = '0.11';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -45,7 +45,6 @@ if ($opts{'h'}) { usage(); }
 
 my $our_hostname = hostname();
 my @startup_time = localtime();
-my $timezone     = get_timezone();
 
 my ($uid, $gid);
 
@@ -57,8 +56,8 @@ my $select_timeout = 1;
 
 my $config_reinit  = 1;
 
-my ($mailserver, $limit, $pager_limit, $hidepid, $status, $listen);
-my (%main, %last_match, %last_queue, %filter_file, %filter_args, %host_lookup, %regexp_matches);
+my ($mailserver, $limit, $pager_limit, $hidepid, $status, $listen, $resolve);
+my (%main, %last_match, %last_queue, %filter_file, %filter_args, %hostnames, %regexp_matches);
 my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die);
 my (@log_files, @fifo_files, @log_prefix, @regexp, @queues, @skip, @group_stack, @queues_escalation);
 my ($syslog_sender, $syslog_listen_socket);
@@ -142,10 +141,25 @@ if (!$profile) {
         die RED "[ERROR] $main{'csv'}{'path'}: not executable";
     }
 
+    my @readable_log_files;
+
     foreach my $log (@log_files) {
-        die RED "[ERROR] $log: no such file"      if (! -f $log);
-        die RED "[ERROR] $log: file not readable" if (! -r $log);
+        unless (-f $log) {
+            print STDERR RED "[WARNING] $log: no such file\n";
+            next;
+        }
+
+        unless (-r $log) {
+            print STDERR RED "[WARNING] $log: file not readable\n";
+            next;
+        }
+        push @readable_log_files, $log;
     }
+
+    @readable_log_files > 0 || @fifo_files > 0
+        or die RED "[ERROR] no readable log files";
+
+    @log_files = @readable_log_files;
 }
 
 #
@@ -253,12 +267,12 @@ while (!$time_to_die) {
             if (! ($line =~ /^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/)) {
                 my ($port, $ipaddr) = sockaddr_in(getpeername($syslog_listen_socket));
 
-                if (not defined $host_lookup{$ipaddr}) {
-                    $host_lookup{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
+                if (not defined $hostnames{$ipaddr}) {
+                    $hostnames{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
                 }
 
             my $time = strftime "%b %e %H:%M:%S", localtime;
-            $line = sprintf("%s %s %s", $time, $host_lookup{$ipaddr}, $line);
+            $line = sprintf("%s %s %s", $time, $hostnames{$ipaddr}, $line);
             }
         }
 
@@ -286,7 +300,7 @@ sub config_read {
 
     if ($config_reinit) {
         %main               = ();
-        %host_lookup        = ();
+        %hostnames          = ();
         @regexp             = ();
         %regexp_matches     = ();
         @queues             = ();
@@ -299,6 +313,7 @@ sub config_read {
         $main{'group_host'} = {};
 
         $hidepid = 0;
+        $resolve = 0;
 
         push @log_prefix, qr/^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/;
 
@@ -436,6 +451,11 @@ sub config_read {
             else { $hidepid = 0; }
             $debug && debug(1,$_);
         }
+        elsif (/^set\s+resolve\s+(off|on)/) {
+            if ($1 eq 'on') { $resolve = 1; }
+            else { $resolve = 0; }
+            $debug && debug(1,$_);
+        }
         elsif
         (/^set\s+queue\s+(\S+)\s+(\S+(?:\@\S+)?)\s+(pager:)?(\S+(?:\@\S+)?)\s+\[((?:\S+(?:\s+)?){5}|now)\]\s*(\S+.*)?/o) {
 
@@ -523,7 +543,7 @@ sub config_read {
                 }
             }
 
-            if ($queue[0] =~ /:/) {
+            if (@queue > 1 and $queue[0] =~ /:/) {
                 die RED "[ERROR] Left most queue in a multiple queue declaration can not have an escalation number\n";
             }
 
@@ -750,7 +770,18 @@ sub queue_mail {
 
         my $index = 0;
         next unless (keys %{$main{$queue}{'logs'}{$hostname}});
-        print $tmp "\n$hostname: \n" if (!$main{$queue}{'pager'});
+
+        if ($resolve && !$main{$queue}{'pager'}) {
+            my $ipaddr = inet_aton($hostname);
+            $hostnames{$ipaddr} = gethostbyaddr($ipaddr, AF_INET) if($ipaddr && !defined $hostnames{$ipaddr});
+            if(defined $ipaddr && defined $hostnames{$ipaddr}) {
+                print $tmp "\n$hostname ($hostnames{$ipaddr}): \n";
+            } else {
+                print $tmp "\n$hostname: \n";
+            }
+        } else {
+            print $tmp "\n$hostname: \n" if (!$main{$queue}{'pager'});
+        }
 
         my @sorted_keys;
         if ($sort_order eq 'descending') {
@@ -777,7 +808,7 @@ sub queue_mail {
 
         # Clear regexp match count for every regexp whose left most queue is the one being mailed.
         for (my $index = 0; $index <= $#regexp; $index++) {
-            my @q  = split(/,/, $queues[$index]);
+            my @q = split(/,/, $queues[$index]);
             $regexp_matches{$hostname}[$index] = 0 if $q[0] eq $queue;
         }
     }
@@ -818,7 +849,8 @@ sub queue_mail {
         return;
     }
 
-    my $subject = $main{$queue}{'subject'} || $subject;
+    my $timezone = get_timezone();
+    my $subject  = $main{$queue}{'subject'} || $subject;
 
     $smtp->datasend("From: $main{$queue}{'mailfrom'}\n");
     $smtp->datasend("To: $main{$queue}{'mailto'}\n");
@@ -868,7 +900,7 @@ sub csv_out {
 
         # Clear regexp match count for every regexp whose left most queue is the one being mailed.
         for (my $index = 0; $index <= $#regexp; $index++) {
-            my @q  = split(/,/, $queues[$index]);
+            my @q = split(/,/, $queues[$index]);
             $regexp_matches{$hostname}[$index] = 0 if $q[0] eq 'csv';
         }
     }
@@ -886,6 +918,7 @@ sub csv_out {
 }
 
 sub daemonize {
+    $0 = 'tenshi';
     chdir '/'                   or die RED "[ERROR] can't chdir to /: $!\n";
     defined(my $pid = fork)     or die RED "[ERROR] can't fork: $!\n";
     exit if $pid;
@@ -1115,7 +1148,7 @@ sub debug {
 
 sub usage {
    die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2008                Andrea Barisani || <andrea\@inversepath.com>
+Copyright 2004-2009                Andrea Barisani || <andrea\@inversepath.com>
                                        Rob Holland ||    <rob\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file

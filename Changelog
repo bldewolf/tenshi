@@ -1,3 +1,12 @@
+0.11                                                    (20090719)
+
+- change process name to tenshi when in daemon mode
+- timezone is no longer cached, preventing incorrect timestamps on DST change
+- allow leftmost queue escalation, warn on unreadable log files instead of exiting
+        Heath Caldwell <hncaldwell@csupomona.edu>
+- added resolve option
+        Brian De Wolf <bldewolf@csupomona.edu>
+
 0.10                                                    (20080313)
 
 - includedir now skips dotfiles
@@ -6,7 +15,7 @@
 - fixed buggy time_to_die
 - fixed buggy tail_multiple option parsing
 - fixed empty report sending if filter program returns no output
-- fixed bug on unmatched subpatterns, thanks goes to
+- fixed bug on unmatched subpatterns
         Adam James <atj@pulsewidth.org.uk>
 - die before pipe if tail_file is not readable, prevents fd leak
 - replaced IO::Select with IO::BufferedSelect, fixes parsing delay of buffered lines
@@ -15,7 +24,7 @@
 
 - improved debug messages
 - moved CHLD signal handler earlier in the code
-- fixed buggy multiple tail processes handling, thanks goes to
+- fixed buggy multiple tail processes handling
         Paul B. Henson <henson@csupomona.edu>
 
 0.9                                                     (20070919)
@@ -24,28 +33,28 @@
 - added csv option for comma separated output to custom parser
 - merged tailargs and filterargs features in tail, filter ones
 - added FAQ file
-- another round of rpm spec fixes + fd leak fix, thanks goes to
+- another round of rpm spec fixes + fd leak fix
         Elan Ruusamäe <glen@delfi.ee>
 
 0.8                                                     (20070819)
 
 - fixed some rpm spec issues
-- Added support for queue escalation.
+- added support for queue escalation
         Heath Caldwell <hncaldwell@csupomona.edu>
 
 0.7                                                     (20070314)
 
 - fifo option can be specified multiple times
 - logfile and fifo mode can be simultaneous
-- better pipe opening method for the tail process, thanks goes to
+- better pipe opening method for the tail process
         Paul B. Henson <henson@csupomona.edu>
-- includedir now sorts entries alphabetically, thanks goes to
+- includedir now sorts entries alphabetically
         Andreas Niederl <rico32@gmx.net>
 - stdin is now closed as soon as possible
 - replaced alarm based timeout with IO::Select
 - minor fix of getpwnam checks
 - added sort_order option
-- added listen option for syslog server mode, thanks goes to
+- added listen option for syslog server mode
         Daniele Cortesi <dan@linux.it>
 - added RedHat init file and rpm spec from
         Steven McCoy <steven@indigorobot.com>
@@ -117,7 +126,7 @@
 - added logprefix option to handle non-syslog logs
 - added status messages
 - added log files perms check
-- fixed strftime portability issue, thanks goes to
+- fixed strftime portability issue
         Andrew Eason <andrew@armstrong.edu>
 
 0.2.1                                                   (20040622)

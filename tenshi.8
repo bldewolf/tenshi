@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "13 Mar 2008" "version 0.10"
+.TH "tenshi" 8 "19 Jul 2009" "version 0.11"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -235,6 +235,13 @@ as a filter and graphing tenshi output. Check the FAQ for sample usage.
 The sorting order for reports. It can be either descending or ascending, the
 number of messages is used as a key for sorting the log messages. The default
 order is ascending.
+.TP
+.I set resolve <on|off>
+This option turns on resolution of the fully qualified domain name for the hostname passed along
+with log messages and, if found, reports it along with the original one. This only affects reports
+and not pager messages. The name resolution is cached in order to avoid re-resolving addresses that
+have been seen already, you have to restart or HUP tenshi in order to flush the cache. This option
+is disabled by default.
 .LP
 
 .I QUEUES OPTIONS
@@ -337,16 +344,16 @@ be placed into the queue when <escalation_number> messages have matched the
 regexp. The queue will receive the message that matched the regexp at the time
 of escalation, with a count equal to the escalation number. The count of
 messages matching the regexp will be reset when the left most queue mentioned
-in the queue list is mailed.The left most queue cannot have an escalation
-number. When the number of messages that match the regexp reaches the greatest
-escalation number mentioned, escalation will begin again into the escalation
-queues, modulus the greatest escalation number. For example, using the queues
-`a,b:10,c:50', when 10 messages match the regexp, a message will go into b,
-when 50 match, one will go into c. At 60, another will go into b, and at 100,
-another into c, 110 to b, 150 to c, and so on. Escalation numbers must be
-positive integers greater than zero and must be listed in increasing order from
-left to right. All queues without escalation numbers must be listed more left
-than the queues with escalation numbers.
+in the queue list is mailed. The left most queue cannot have an escalation
+number unless it is the only queue listed. When the number of messages that
+match the regexp reaches the greatest escalation number mentioned, escalation
+will begin again into the escalation queues, modulus the greatest escalation
+number. For example, using the queues `a,b:10,c:50', when 10 messages match the
+regexp, a message will go into b, when 50 match, one will go into c. At 60,
+another will go into b, and at 100, another into c, 110 to b, 150 to c, and so
+on. Escalation numbers must be positive integers greater than zero and must be
+listed in increasing order from left to right. All queues without escalation
+numbers must be listed more left than the queues with escalation numbers.
 
 .br
 The standard grouping operators
@@ -571,6 +578,6 @@ It should be noted that tenshi was initially a perl rewrite of
 tenshi was initially written by Andrea Barisani. It is now
 maintained by Andrea Barisani and Rob Holland.
 
-Copyright 2004-2008 Andrea Barisani <andrea@inversepath.com>
+Copyright 2004-2009 Andrea Barisani <andrea@inversepath.com>
                     Rob Holland        <rob@inversepath.com>
 
