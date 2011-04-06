@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.3.1 2004/07/21
+# tenshi 0.3.2 2004/10/09
 # <tenshi@gentoo.org>
 # Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
 #
@@ -13,20 +13,28 @@ use strict;
 use warnings;
 use Net::SMTP;
 use Getopt::Std;
-use POSIX qw(setsid strftime floor);
+use Sys::Hostname;
+use POSIX qw(locale_h setsid strftime floor);
+
+setlocale(LC_TIME, "C");
 
 my %opts; 
-getopts('c:hdpP:', \%opts);
+getopts('c:hdfpP:', \%opts);
 if ($opts{'h'}) { usage(); }
 
 sub usage {
-   die "tenshi 0.3.1 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-d] [-p] [-P pid_file]
+   die "tenshi 0.3.2 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-d] [-p] [-P pid_file]
    -c configuration file
    -d debug mode
+   -f foreground mode
    -p profile mode
    -P pid file
    -h this help\n\n";
 }
+
+my $version  = '0.3.2';
+my $hostname = hostname();
+my @startup_time = localtime();
 
 my $last_check  = 0;
 my $last_minute = 0;
@@ -39,6 +47,7 @@ my (%main, %last_match, %last_queue);
 
 my $debug       = $opts{'d'} || 0;
 my $profile     = $opts{'p'} || 0;
+my $foreground  = $opts{'f'} || 0;
 my $config_file = $opts{'c'} || '/etc/tenshi/tenshi.conf';
 my $pidfile     = $opts{'P'} || '/var/run/tenshi.pid';
 
@@ -47,7 +56,7 @@ my $tail_args   = '-q --follow=name --retry -n 0';
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
                'thu' => 4, 'fri' => 5, 'sat' => 6,
-               'sun' => 7 );
+               'sun' => 0 );
 
 my %months = ( 'jan' => 1,  'feb' => 2,  'mar' => 3,
                'apr' => 4,  'may' => 5,  'jun' => 6,
@@ -55,16 +64,16 @@ my %months = ( 'jan' => 1,  'feb' => 2,  'mar' => 3,
                'oct' => 10, 'nov' => 11, 'dec' => 12 );
 
 my @cron_specs = (
-    { 'min' => 0, 'max' => 59, 'shift' => 0,  'localtime_field' => 1 },
-    { 'min' => 0, 'max' => 23, 'shift' => 0,  'localtime_field' => 2 },
-    { 'min' => 1, 'max' => 31, 'shift' => 0,  'localtime_field' => 3 },
-    { 'min' => 1, 'max' => 12, 'shift' => -1, 'localtime_field' => 4, 'strings' => \%months },
-    { 'min' => 1, 'max' => 7,  'shift' => -1, 'localtime_field' => 6, 'strings' => \%days   },
+    { 'min' => 0, 'max' => 59, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 1 },
+    { 'min' => 0, 'max' => 23, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 2 },
+    { 'min' => 1, 'max' => 31, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 3 },
+    { 'min' => 1, 'max' => 12, 'shift' => -1, 'wrap' => 0, 'localtime_field' => 4, 'strings' => \%months },
+    { 'min' => 0, 'max' => 7,  'shift' => 0, 'wrap' => 1, 'localtime_field' => 6, 'strings' => \%days   },
 );
  
-my $mask        = "______";
+my $mask        = '______';
 my $mask_length = length $mask;
-my $subject     = "tenshi report"; 
+my $subject     = 'tenshi report'; 
 my $timezone    = get_timezone();
 
 config_read();
@@ -87,7 +96,7 @@ foreach my $log (@log_files) {
 # log file parsing 
 #
 
-daemonize() unless ($debug || $profile);
+daemonize() unless ($debug || $profile || $foreground);
 
 if (!$profile and !$fifo_file) {
 
@@ -114,10 +123,10 @@ if (!$profile and !$fifo_file) {
 
 $debug && debug(3);
 
-$SIG{'TERM'} = sub { $debug && debug(5,'TERM') ; $status = "terminating"; $queue_flush_needed = 1; $time_to_die = 1; };
-$SIG{'INT'}  = sub { $debug && debug(5, 'INT') ; $status = "terminating"; $queue_flush_needed = 1; $time_to_die = 1; };
-$SIG{'HUP'}  = sub { $debug && debug(5, 'HUP') ; $status = "reloading"  ; $queue_flush_needed = 1; $config_read_needed = 1; };
-$SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = "flushing"   ; $queue_flush_needed = 1; };
+$SIG{'TERM'} = sub { $debug && debug(5,'TERM') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die = 1; };
+$SIG{'INT'}  = sub { $debug && debug(5, 'INT') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die = 1; };
+$SIG{'HUP'}  = sub { $debug && debug(5, 'HUP') ; $status = 'reloading'  ; $queue_flush_needed = 1; $config_read_needed = 1; };
+$SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue_flush_needed = 1; };
 $SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print "[ERROR] Child died. Bailing out\n"; $time_to_die = 1; };
 
 while (1) {
@@ -129,7 +138,7 @@ while (1) {
 
     if ($queue_flush_needed) { queues_flush(); $queue_flush_needed = 0; }
     if ($config_read_needed) { config_read();  $config_read_needed = 0; }
-    if ($time_to_die) { unlink $pidfile unless ($debug || $profile); die("Killed!\n"); }
+    if ($time_to_die) { unlink $pidfile unless ($debug || $profile); close FH; die("Killed!\n"); }
 
     my $line;
 
@@ -170,7 +179,7 @@ while (1) {
                 next if ($queue eq 'group');
  
                 if ($queue eq 'repeat' and $last_match{$hostname}) {
-                    $main{$last_queue{$hostname}}{logs}{$hostname}{$last_match{$hostname}} += $1;
+                    $main{$last_queue{$hostname}}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
                     last;
                 }	    
 
@@ -192,7 +201,7 @@ while (1) {
 
                 $last_queue{$hostname} = $queue;
                 $last_match{$hostname} = $line;
-                $main{$queue}{logs}{$hostname}{$line}++;
+                $main{$queue}{'logs'}{$hostname}{$line}++;
 
                 last;
             }
@@ -222,9 +231,9 @@ sub config_read {
     @queues = ();
     @skip   = ();
     @log_prefix   = ();
-    $main{group}  = {};
-    $main{trash}  = {};
-    $main{repeat} = {};
+    $main{'group'}  = {};
+    $main{'trash'}  = {};
+    $main{'repeat'} = {};
 
     $hidepid = 0;
 
@@ -297,7 +306,7 @@ sub config_read {
             $debug && debug(1,$_);
         }
         elsif
-        (/^set\s+queue\s+(\w+)\s+(\S+\@\S+)\s+(\S+\@\S+)\s+\[((?:\S+(?:\s+)?){5}|now)\]\s*(\S+.*)?/o) {
+        (/^set\s+queue\s+(\S+)\s+(\S+(?:\@\S+)?)\s+(\S+(?:\@\S+)?)\s+\[((?:\S+(?:\s+)?){5}|now)\]\s*(\S+.*)?/o) {
 
             my ($queue, $mail_from, $mail_to, $cron_spec, $subject) = ($1, $2, $3, $4, $5);
 
@@ -413,7 +422,7 @@ sub queues_flush {
 sub queue_mail {
     my $queue = shift;
 
-    return unless (keys %{$main{$queue}{logs}});
+    return unless (keys %{$main{$queue}{'logs'}});
     $debug && debug(11,$queue);
  
     my $subject = $main{$queue}{'subject'} || $subject;
@@ -429,19 +438,28 @@ sub queue_mail {
     $smtp->datasend("From: $main{$queue}{'mailfrom'}\n");
     $smtp->datasend("To: $main{$queue}{'mailto'}\n");
     $smtp->datasend("Date: " . strftime("%a, %d %b %Y %H:%M:%S $timezone", localtime()) . "\n");
+    $smtp->datasend("X-tenshi-version: $version\n");
+    $smtp->datasend("X-tenshi-hostname: $hostname\n");
+ 
+    if (!$main{$queue}{'now'}) {
+	my @now = localtime();
+        $main{$queue}{'report_time'} = [ @startup_time ] if (!$main{$queue}{'report_time'});
+        $smtp->datasend("X-tenshi-report-start: " . strftime("%a %b %d %H:%M:%S $timezone %Y", @{$main{$queue}{'report_time'}}) . "\n");
+        $main{$queue}{'report_time'} = [ @now ];
+    }	
+    
     $smtp->datasend("Subject: $subject [$queue]\n\n");
 
     if ($status) {
         $smtp->datasend("*** Status: $status ***\n");
     }	
-
-    foreach my $hostname (keys %{$main{$queue}{logs}}) {
+    foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
 
         my $index = 0;
-        next unless (keys %{$main{$queue}{logs}{$hostname}});
+        next unless (keys %{$main{$queue}{'logs'}{$hostname}});
         $smtp->datasend("\n$hostname: \n");
 
-        foreach my $key (reverse sort { $main{$queue}{logs}{$hostname}{$a} <=> $main{$queue}{logs}{$hostname}{$b} } keys %{$main{$queue}{logs}{$hostname}}) {
+        foreach my $key (reverse sort { $main{$queue}{'logs'}{$hostname}{$a} <=> $main{$queue}{'logs'}{$hostname}{$b} } keys %{$main{$queue}{'logs'}{$hostname}}) {
             last if ($limit and ($index >= $limit));
             $smtp->datasend("    $main{$queue}{'logs'}{$hostname}{$key}: $key\n");
             $index++;
@@ -452,7 +470,7 @@ sub queue_mail {
     }
 
     $smtp->quit;
-    $main{$queue}{logs} = {};
+    $main{$queue}{'logs'} = {};
 }
 
 sub daemonize {
@@ -555,6 +573,10 @@ sub cron_spec_to_mask {
             }
 
             for (my $j = $start; $j <= $end; $j += $skip) {
+	    	if (($j == $end) && $cron_spec->{'wrap'} && ($j == $cron_spec->{'max'})) {
+                	$mask_fields[$cron_spec->{'min'}] = 1;
+			last;
+		}
                 $mask_fields[$j] = 1;
             }
 

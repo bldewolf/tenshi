@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "21 Jul 2004" "version 0.3.1"
+.TH "tenshi" 8 "9 Nov 2004" "version 0.3.2"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -12,6 +12,7 @@ tenshi - Log Monitoring and Reporting tool
 .I configuration file
 .B ]
 .B [ -d ]
+.B [ -f ]
 .B [ -h ]
 .B [ -p ]
 .B [ -P ]
@@ -43,7 +44,11 @@ and then forks a deamon for monitoring the specified log files.
 Read configuration from file. (default: /etc/tenshi/tenshi.conf)
 .TP
 .I -d
-Enable debug mode. In this mode the main process remains in the foreground.
+Enable debug messages. In this mode the main process remains in the foreground.
+.TP
+.I -f
+Enable foreground mode. In this mode the main process operates normally but remains 
+in the foreground, this is needed for some process supervisors.
 .TP
 .I -p
 Enable profiling mode. In this mode the main process remains in the foreground
@@ -182,10 +187,10 @@ emailed. Ranges and skip values are supported as per the de facto crontab
 syntax with a few exceptions. Please see
 .I crontab
 man page for crontab syntax explanation. The supported day names are: Mon, Tue,
-Wed, Thu, Fri, Sat, Sun. Monday is 1, Sunday 7. In contrast to crontab, 0 is not
-a valid day entry. Supported month names are: Jan, Feb, Mar, Apr, May, Jun, Jul,
-Aug, Sep, Oct, Nov, Dev. Day and Month names are not case sensitive.
-Additionally, 'now' can be specified for immediate notifications.
+Wed, Thu, Fri, Sat, Sun. Monday is 1, Sunday 0 or 7.  Supported month names
+are: Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dev. Day and Month
+names are not case sensitive.  Additionally, 'now' can be specified for
+immediate notifications.
 .TP
 .I <subject>
 This is the subject for to use for email reports regarding this queue. If this
@@ -364,7 +369,7 @@ the Free Software Foundation; either version 2 of the License, or
 .SH DISTRIBUTION
 
 The latest version of tenshi can be found at
-.BI http://www.gentoo.org/~lcars/tenshi
+.BI http://tenshi.gentoo.org
 
 Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
 

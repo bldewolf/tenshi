@@ -1,5 +1,5 @@
 
-tenshi 0.3.1 README
+tenshi 0.3.2 README
 Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
 
 
@@ -60,7 +60,7 @@ using the CPAN shell (`perl -e shell -MCPAN`).
 
 - References
 
-http://www.gentoo.org/proj/en/infrastructure/tenshi/index.xml
+http://tenshi.gentoo.org
 http://www.gentoo.org/~lcars/tenshi
 
 Please send requests/suggestions/bug reports to <tenshi@gentoo.org>

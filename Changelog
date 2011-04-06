@@ -1,3 +1,13 @@
+
+0.3.2
+
+- added X-tenshi-version, X-tenshi-hostname, X-tenshi-report-start headers
+- fixed orphan tail process problem, filehandle is now closed on shutdown
+- fixed bug in cron specs handling
+- LC_TIME locale is internally set to "C" now for compliant Date header
+- mail address specification allows local part only
+- added foreground mode
+
 0.3.1
 
 - added 'set tailargs' option
