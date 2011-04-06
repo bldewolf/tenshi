@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "19 Jul 2009" "version 0.11"
+.TH "tenshi" 8 "17 Sep 2010" "version 0.12"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -146,10 +146,7 @@ A FIFO file to monitor. This option allows you to use a syslog-ng
 destination (or any other syslog implementation that allows FIFO usage). This may be
 specified multiple times to watch more than one fifo file. This option is meant to be used
 only when the installed 'tail' binary doesn't behave properly with FIFOs, please
-test your tail implementation before using this. A suitable test is 'echo foo |
-tail -f', if this dies complaining of an illegal seek, you have a broken
-version of tail installed. GNU tail is broken in this way, most BSD tails will
-work. This mode can be used along with
+test your tail implementation before using this. This mode can be used along with
 .I logfile
 and
 .I listen
@@ -212,7 +209,7 @@ The subject of report emails, the queue name is always automatically appended.
 .I set hidepid <on|off>
 This option turns on automatic stripping of 'foo[1234]:' style PID strings from
 the start of log lines i.e. 'foo[1234]:' becomes 'foo:'. This allows you to
-write regexs without worrying about masking the PID. Bear in mind that any time
+write regexps without worrying about masking the PID. Bear in mind that any time
 you change this option you will need to re-write your regex rules or they will
 not work. This option is disabled by default.
 .TP
@@ -402,7 +399,7 @@ associated to the log entries matches the regex passed to the
 definition.
 
 .br
-The regexs below assume
+The regexps below assume
 .I hidepid
 is turned on. If you have it turned off then you will need to add in \\[(.+)\\]
 to the regex following the progam name to get them to work.
@@ -510,23 +507,11 @@ can grab them at CPAN (http://www.cpan.org) or using the CPAN shell (`perl -e
 shell -MCPAN`).
 
 .SH BUGS
-- Double quotation characters present in your logs might break csv output (depending on how you pipe/process
+Double quotation characters present in your logs might break csv output (depending on how you pipe/process
 it in the filter) since there's no escape code (yet).
 
 Please report any bugs you find at
 .BI <tenshi@inversepath.com>
-
-.SH TODO
-- custom reports layout
-.br
-- add other actions besides mail notifications
-.br
-- find/design a logo
-.br
-- everything that's reported at
-.BI http://dev.inversepath.com/trac/tenshi/report
-
-Any volunteers ? ;)
 
 .SH LICENSE
 .B tenshi
@@ -547,24 +532,14 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 .SH DISTRIBUTION
 
 The tenshi project page is
-.BI http://dev.inversepath.com/trac/tenshi
+.BI http://www.inversepath.com/tenshi.html
 
 .SH NOTES
 
-tenshi was formerly known as
+tenshi was once known as
 .I wasabi
 but the name was changed as we were informed that wasabi is a registered a
 trademark relating to another piece of software.
-
-Two mailing lists are also available:
-
-.RI < tenshi-user@lists.inversepath.com >
-for general discussion, subscribe by sending a message to
-.RI < tenshi-user+subscribe@lists.inversepath.com >
-
-.RI < tenshi-announce@lists.inversepath.com >
-for announcements, subscribe by sending a message to
-.RI < tenshi-announce+subscribe@lists.inversepath.com >
 
 .SH SEE ALSO
 
@@ -575,9 +550,6 @@ It should be noted that tenshi was initially a perl rewrite of
 .I Friedl, Jeffrey E. F. Mastering Regular Expressions, 2nd Edition. O'Reilly
 
 .SH AUTHORS
-tenshi was initially written by Andrea Barisani. It is now
-maintained by Andrea Barisani and Rob Holland.
 
-Copyright 2004-2009 Andrea Barisani <andrea@inversepath.com>
-                    Rob Holland        <rob@inversepath.com>
+Copyright 2004-2010 Andrea Barisani <andrea@inversepath.com>
 

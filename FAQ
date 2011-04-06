@@ -1,5 +1,5 @@
-Tenshi -- Frequently Asked Questions
-http://dev.inversepath.com/trac/tenshi/wiki/FAQ
+tenshi -- Frequently Asked Questions
+http://www.inversepath.com/tenshi_faq.html
 
 
 - Why don't you use File::Tail ?
@@ -11,7 +11,7 @@ that.
 - How's tenshi different from other tools like swatch, logwatch, logsentry,
   sec, etc, etc... ?
 
-Quoting http://lists.shmoo.com/pipermail/loganalysis/2006-January/002951.html,
+Quoting http://marc.info/?l=loganalysis&m=113657727325755&w=2
 
 There are no definitive points against one or other apps for most people,
 sometimes you just have to "feel" what works for you.

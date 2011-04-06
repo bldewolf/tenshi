@@ -1,7 +1,6 @@
 
-tenshi 0.11 README
-Copyright 2004-2009 Andrea Barisani <andrea@inversepath.com>
-                    Rob Holland        <rob@inversepath.com>
+tenshi 0.12 README
+Copyright 2004-2010 Andrea Barisani <andrea@inversepath.com>
 
 
 - What's tenshi?
@@ -102,14 +101,6 @@ shell -MCPAN).
 
 - Resources:
 
-The tenshi project page is http://dev.inversepath.com/trac/tenshi
+The tenshi project page is http://www.inversepath.com/tenshi.html
 
 Please report any bugs you find at <tenshi@inversepath.com>.
-
-Two mailing lists are also available:
-
-<tenshi-user@lists.inversepath.com> for general discussion, subscribe by sending a
-message to <tenshi-user+subscribe@lists.inversepath.com>
-
-<tenshi-announce@lists.inversepath.com> for announcements, subscribe by sending a
-message to <tenshi-announce+subscribe@lists.inversepath.com>

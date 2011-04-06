@@ -40,7 +40,7 @@ stop() {
 status() {
 
     if [ ! -f "$VAR_SUBSYS_TENSHI" ]; then
-        echo $"Tenshi is stopped."
+        echo $"tenshi is stopped."
         return 1
     fi
 

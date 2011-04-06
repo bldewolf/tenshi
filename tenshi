@@ -1,10 +1,9 @@
 #!/usr/bin/perl
 #
-# tenshi 0.11 2009/07/19
+# tenshi 0.12 2010/09/17
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2009 Andrea Barisani <andrea@inversepath.com>
-#                     Rob Holland        <rob@inversepath.com>
+# Copyright 2004-2010 Andrea Barisani <andrea@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -34,7 +33,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.11';
+my $version = '0.12';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -130,7 +129,6 @@ if ($debug || $profile || $foreground) {
 #
 
 if (!$profile) {
-
     foreach my $queue (@queues) {
         if ($filter_file{$queue} and ! -x $filter_file{$queue}) {
             die RED "[ERROR] $filter_file{$queue}: not executable";
@@ -167,13 +165,10 @@ if (!$profile) {
 #
 
 if ($profile) {
-
     open(my $fh, "-") or
         die RED "[ERROR] could not open standard input: $!\n";
     push @fhs, $fh;
-
 } else {
-
     if (scalar(@log_files) > 0) {
 
         if ($tail_multiple eq 'on') {
@@ -217,7 +212,7 @@ if ($profile) {
     if (scalar(@fifo_files) > 0) {
         foreach my $fifo_file (@fifo_files) {
             $debug && debug(19, "$fifo_file");
-            open(my $fh, "<$fifo_file") or
+            open(my $fh, "+<$fifo_file") or
                 die RED "[ERROR] could not open $fifo_file: $!\n";
             push @fhs, $fh;
         }
@@ -244,7 +239,6 @@ $SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue
 my $bs = IO::BufferedSelect->new(@fhs);
 
 while (!$time_to_die) {
-
     my $now = time;
 
     if ($now > ($last_check + $sleep)) {
@@ -293,7 +287,6 @@ exit 0;
 #
 
 sub config_read {
-
     my $config_file = shift;
 
     $debug && debug(0,$config_file);
@@ -585,7 +578,6 @@ sub config_read {
 }
 
 sub parse_line {
-
     my $line = $_[0];
 
     if (defined $line) {
@@ -630,7 +622,6 @@ sub parse_line {
             }
 
             if ($line =~ /$regexp/) {
-
                 $debug && debug(7,$queue,$line);
                 last if ($queue eq 'trash');
                 next if ($queue eq 'group');
@@ -872,7 +863,7 @@ sub queue_mail {
 }
 
 sub csv_out {
-    #FIXME: too much code duplication here, need better functions
+    # FIXME: too much code duplication here, need better functions
 
     return unless (keys %{$main{'csv'}{'logs'}});
 
@@ -976,7 +967,6 @@ sub cron_field_resolve {
 }
 
 sub cron_spec_to_mask {
-
     my $string = shift;
 
     my @mask;
@@ -1071,7 +1061,6 @@ sub cron_mask_match {
 }
 
 sub debug {
-
     if (!defined($_[1])) { $_[1] = 'foo'; }
     if (!defined($_[2])) { $_[2] = 'foo'; }
 
@@ -1148,8 +1137,7 @@ sub debug {
 
 sub usage {
    die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2009                Andrea Barisani || <andrea\@inversepath.com>
-                                       Rob Holland ||    <rob\@inversepath.com>\n
+Copyright 2004-2010                Andrea Barisani || <andrea\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax

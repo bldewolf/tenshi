@@ -11,21 +11,23 @@
 #  to define things once, and have to change things in only one place.
 #--------------------------------------------------------------------------------
 %define name       tenshi
-%define version    0.11
+%define version    0.12
 %define release    1
 %define mandir     /usr/share/man
+%define docdir     /usr/share/doc/packages
 %define sbindir    /usr/sbin
+%define bindir     /bin
 
 #--------------------------------------------------------------------------------
 #  Basic package information
 #--------------------------------------------------------------------------------
-Summary:           Tenshi log monitoring program
+Summary:           tenshi log monitoring program
 Name:              %{name}
 Version:           %{version}
 Release:           %{release}
 Group:             System Environment/Daemons
 License:           ISC-style
-Url:               http://dev.inversepath.com/trac/tenshi/wiki/
+Url:               http://www.inversepath.com/tenshi.html
 Source0:           %{name}-%{version}.tar.gz
 Requires:          perl
 Buildroot:         %{_tmppath}/%{name}-buildroot
@@ -65,11 +67,12 @@ mkdir -p %{buildroot}%{_initrddir}
 mkdir -p %{buildroot}%{_sysconfdir}/%{name}
 mkdir -p %{buildroot}/etc/sysconfig
 mkdir -p %{buildroot}/usr/share/man/man8/
+mkdir -p %{buildroot}%{docdir}/%{name}
 mkdir -p %{buildroot}/var/run/%{name}/
 
-make DESTDIR=%{buildroot} mandir=%{_mandir} install
+make DESTDIR=%{buildroot} mandir=%{_mandir} docdir=%{docdir}/%{name} install
 
-install -m755 tenshi.redhat-init %{buildroot}%{_initrddir}/%{name}
+install -m755 tenshi.suse-init %{buildroot}%{_initrddir}/%{name}
 touch %{buildroot}/etc/sysconfig/%{name}
 touch %{buildroot}/var/run/%{name}/%{name}.pid
 
@@ -81,6 +84,8 @@ touch %{buildroot}/var/run/%{name}/%{name}.pid
 # Manually add user/group
 %{sbindir}/groupadd %{name}
 %{sbindir}/useradd -g %{name} -d %{_sysconfdir}/%{name} -s /bin/false %{name}
+# Generate link
+%{bindir}/ln -s /etc/init.d/%{name} /sbin/rc%{name}
 
 #--------------------------------------------------------------------------------
 #  Take tenshi out of runlevels
@@ -97,8 +102,11 @@ fi
 #--------------------------------------------------------------------------------
 %postun
 if [ "$1" = 0 ]; then
-  %{sbindir}/userdel tenshi
+  %{sbindir}/userdel %{name}
+  %{sbindir}/groupdel %{name}
 fi
+# Delete the link
+%{bindir}/rm /sbin/rc%{name}
 
 #--------------------------------------------------------------------------------
 #  What files and permissions are included in the package
@@ -125,6 +133,8 @@ fi
 #  Changelog
 #--------------------------------------------------------------------------------
 %changelog
+* Thu Sep 16 2010 Heinrich Terhardt <heinrich.terhardt@simcon-mt.com> 0.12
+  - some specials for opensuse
 * Mon Aug 27 2007 Andrea Barisani <andrea@inversepath.com> 0.8
   - assorted fixes, thanks goes to Elan Ruusamäe <glen@delfi.ee>
 * Fri Nov 10 2006 Steven McCoy, Jr. <steven@indigorobot.com> 0.6-1

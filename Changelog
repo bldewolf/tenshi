@@ -1,3 +1,10 @@
+0.12                                                    (20100917)
+
+- open FIFO in rw mode, fixes bug that causes CPU spinning and processing interruption
+        Michael Braun <michael-devel@fami-braun.de>
+- redhat rpm spec fixes + opensuse rpm spec and init script
+        Heinrich Terhardt <Heinrich.Terhardt@simcon-mt.com>
+
 0.11                                                    (20090719)
 
 - change process name to tenshi when in daemon mode
