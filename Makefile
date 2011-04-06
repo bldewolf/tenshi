@@ -1,7 +1,7 @@
 # Noddy Makefile for dist
-# $Id: Makefile 273 2005-03-18 10:25:37Z lcars $
+# $Id: Makefile 282 2005-06-07 19:14:23Z lcars $
 
-VERSION = 0.3.3
+VERSION = 0.3.4
 
 bindir = /usr/sbin
 sysconfdir = /etc
@@ -38,5 +38,5 @@ install:
 	[ -f ${DESTDIR}${sysconfdir}/tenshi/tenshi.conf ] || \
 		install -o tenshi -g root -m 0640 -D tenshi.conf ${DESTDIR}${sysconfdir}/tenshi/tenshi.conf
 	install -d ${DESTDIR}${docdir}
-	install ${DOCS} ${DESTDIR}${docdir}/
+	install -m 0644 ${DOCS} ${DESTDIR}${docdir}/
 	install -o tenshi -g root -m 750 -d ${DESTDIR}${libdir}

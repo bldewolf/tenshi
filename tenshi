@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.3.3 2005/03/18
+# tenshi 0.3.4 2005/06/16
 # <tenshi@gentoo.org>
 # Copyright 2004-2005 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@gentoo.org>
 #
@@ -14,6 +14,7 @@ use warnings;
 use Net::SMTP;
 use Getopt::Std;
 use Sys::Hostname;
+use filetest 'access';
 use POSIX qw(locale_h setsid strftime floor);
 
 setlocale(LC_TIME, "C");
@@ -22,18 +23,7 @@ my %opts;
 getopts('c:hdfpCP:', \%opts);
 if ($opts{'h'}) { usage(); }
 
-sub usage {
-   die "tenshi 0.3.2 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-C] [-d] [-p] [-P pid_file]
-   -c configuration file
-   -C test configuration syntax 
-   -d debug mode
-   -f foreground mode
-   -p profile mode
-   -P pid file
-   -h this help\n\n";
-}
-
-my $version  = '0.3.2';
+my $version  = '0.3.4';
 my $hostname = hostname();
 my @startup_time = localtime();
 
@@ -41,8 +31,10 @@ my $last_check  = 0;
 my $last_minute = 0;
 my $sleep       = 5;
 
-my ($config_read, $config_read_needed, $queue_flush_needed, $time_to_die); 
+my $config_reinit = 1;
+
 my ($mailserver, $limit, $fifo_file, $hidepid, $status);
+my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die); 
 my (@log_files, @log_prefix, @regexp, @queues, @skip, @group_stack);
 my (%main, %last_match, %last_queue);
 
@@ -65,11 +57,11 @@ my %months = ( 'jan' => 1,  'feb' => 2,  'mar' => 3,
                'oct' => 10, 'nov' => 11, 'dec' => 12 );
 
 my @cron_specs = (
-    { 'min' => 0, 'max' => 59, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 1 },
-    { 'min' => 0, 'max' => 23, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 2 },
-    { 'min' => 1, 'max' => 31, 'shift' => 0, 'wrap' => 0, 'localtime_field' => 3 },
+    { 'min' => 0, 'max' => 59, 'shift' => 0,  'wrap' => 0, 'localtime_field' => 1 },
+    { 'min' => 0, 'max' => 23, 'shift' => 0,  'wrap' => 0, 'localtime_field' => 2 },
+    { 'min' => 1, 'max' => 31, 'shift' => 0,  'wrap' => 0, 'localtime_field' => 3 },
     { 'min' => 1, 'max' => 12, 'shift' => -1, 'wrap' => 0, 'localtime_field' => 4, 'strings' => \%months },
-    { 'min' => 0, 'max' => 7,  'shift' => 0, 'wrap' => 1, 'localtime_field' => 6, 'strings' => \%days   },
+    { 'min' => 0, 'max' => 7,  'shift' => 0,  'wrap' => 1, 'localtime_field' => 6, 'strings' => \%days   },
 );
  
 my $mask        = '______';
@@ -77,15 +69,17 @@ my $mask_length = length $mask;
 my $subject     = 'tenshi report'; 
 my $timezone    = get_timezone();
 
-config_read();
+config_read($config_file);
 $config_read = 1;
+
+if ($opts{'C'}) { exit 0; }
 
 #
 # environment sanity check
 #
 
 die "[ERROR] no smtp server specified!" if (!$mailserver);
-die "[ERROR] $fifo_file: no such file!" if ((!$profile and $fifo_file)  and   -f $fifo_file);
+die "[ERROR] $fifo_file: no such file!" if ((!$profile and $fifo_file)         and   -f $fifo_file);
 die "[ERROR] $tail_file: no such file!" if ((!$profile and scalar(@log_files)) and ! -f $tail_file);
 
 foreach my $log (@log_files) {
@@ -124,9 +118,10 @@ if (!$profile and !$fifo_file) {
 
 $debug && debug(3);
 
-$SIG{'TERM'} = sub { $debug && debug(5,'TERM') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die = 1; };
-$SIG{'INT'}  = sub { $debug && debug(5, 'INT') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die = 1; };
-$SIG{'HUP'}  = sub { $debug && debug(5, 'HUP') ; $status = 'reloading'  ; $queue_flush_needed = 1; $config_read_needed = 1; };
+$SIG{'TERM'} = sub { $debug && debug(5,'TERM') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die   = 1; };
+$SIG{'INT'}  = sub { $debug && debug(5, 'INT') ; $status = 'terminating'; $queue_flush_needed = 1; $time_to_die   = 1; };
+$SIG{'HUP'}  = sub { $debug && debug(5, 'HUP') ; $status = 'reloading'  ; $queue_flush_needed = 1; $config_reinit = 1; };
+$SIG{'USR1'} = sub { $debug && debug(5,'USR1') ; $status = 'queue check'; $queue_check_needed = 1; };
 $SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue_flush_needed = 1; };
 $SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print "[ERROR] Child died. Bailing out\n"; $time_to_die = 1; };
 
@@ -137,8 +132,9 @@ while (1) {
         queues_check($now);
     }
 
-    if ($queue_flush_needed) { queues_flush(); $queue_flush_needed = 0; }
-    if ($config_read_needed) { config_read();  $config_read_needed = 0; }
+    if ($queue_check_needed) { queues_check($now);         $queue_check_needed = 0; }
+    if ($queue_flush_needed) { queues_flush();             $queue_flush_needed = 0; }
+    if ($config_reinit)      { config_read($config_file);  $config_reinit      = 0; }
     if ($time_to_die) { unlink $pidfile unless ($debug || $profile); close FH; die("Killed!\n"); }
 
     my $line;
@@ -171,6 +167,7 @@ while (1) {
 
             my $regexp = $regexp[$index];
             my $queue  = $queues[$index];
+            my @queue  = split(/,/, $queues[$index]);
 
             if ($line =~ /$regexp/) { 
 
@@ -179,9 +176,12 @@ while (1) {
                 next if ($queue eq 'group');
  
                 if ($queue eq 'repeat' and $last_match{$hostname}) {
-                    $main{$last_queue{$hostname}}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
+                    my @last_queue = split(/,/, $last_queue{$hostname});
+                    foreach my $last_queue (@last_queue) {
+                        $main{$last_queue}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
+                    }
                     last;
-                }	    
+                }
 
                 my $offset = 0;
                 my ($begin, $end);
@@ -201,7 +201,10 @@ while (1) {
 
                 $last_queue{$hostname} = $queue;
                 $last_match{$hostname} = $line;
-                $main{$queue}{'logs'}{$hostname}{$line}++;
+
+                foreach my $queue (@queue) {
+                    $main{$queue}{'logs'}{$hostname}{$line}++;
+                }    
 
                 last;
             }
@@ -223,32 +226,50 @@ exit 0;
 #
 
 sub config_read {
+
+    my $config_file = shift;
     
-    $debug && debug(0);
+    $debug && debug(0,$config_file);
 
-    %main   = ();
-    @regexp = ();
-    @queues = ();
-    @skip   = ();
-    @log_prefix   = ();
-    $main{'group'}  = {};
-    $main{'trash'}  = {};
-    $main{'repeat'} = {};
+    if ($config_reinit) {
+        %main   = ();
+        @regexp = ();
+        @queues = ();
+        @skip   = ();
+        @log_prefix     = ();
+        $main{'group'}  = {};
+        $main{'trash'}  = {};
+        $main{'repeat'} = {};
 
-    $hidepid = 0;
+        $hidepid = 0;
 
-    push @log_prefix, qr/^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/;
+        push @log_prefix, qr/^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/;
+        
+        $config_reinit = 0;
+    }        
 
     #
     # configuration file parsing
     #
 
-    open(CONF,$config_file) or die "[ERROR] could not open configuration file $config_file: $!\n";
+    open(my $CONF,$config_file) or die "[ERROR] could not open configuration file $config_file: $!\n";
 
-    while (<CONF>) {
+    while (<$CONF>) {
         s/^\s+//;
         next if (/^#|^$/); 
         chomp;
+
+        if (/^include\s+(\S+)/) { $debug && debug(1,$_) ; config_read($1); next; }
+
+        if (/^includedir\s+(\S+)/) { 
+            $debug && debug(1,$_);
+            opendir(my $DIR, $1) or die "[ERROR] could not open directory $1: $!\n";
+            while (defined(my $file = readdir($DIR))) {
+                next unless -f "$1/$file";
+                config_read("$1/$file"); 
+            }
+            next; 
+        }
 
         if (/^set\s+logfile\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @log_files))) {
@@ -315,15 +336,15 @@ sub config_read {
             }
 
             if ($cron_spec eq 'now') { 
-	        $main{$queue}{'now'} = 1; 
+                $main{$queue}{'now'} = 1; 
             } else { 
-	        $main{$queue}{'cron_mask'} = cron_spec_to_mask($cron_spec); 
+                $main{$queue}{'cron_mask'} = cron_spec_to_mask($cron_spec); 
             }
 
             $main{$queue}{'mailfrom'} = $mail_from; $debug && debug(1,"queue: $queue - mail_from => $mail_from"); 
             $main{$queue}{'mailto'}   = $mail_to;   $debug && debug(1,"queue: $queue - mailto    => $mail_to"); 
             
-	    if ($subject) {
+            if ($subject) {
                 $main{$queue}{'subject'} = $subject;  $debug && debug(1,"queue: $queue - subject => $subject");
             }
 
@@ -333,13 +354,20 @@ sub config_read {
             die "[ERROR] Invalid set directive!: $_\n";
 
         }
-        elsif (my ($queue, $reg) = $_ =~ /(^\w+)\s+(.+$)/) {
+        elsif (my ($queue, $reg) = $_ =~ /(^\S+)\s+(.+$)/) {
 
             $debug && debug(1,"queue: $queue regexp: $reg");
 
-            if (!($main{$queue})) {
-                die "[ERROR] Invalid configuration directive!: queue $queue not defined\n";
-            }
+            my @queue = split(/,/, $queue);
+
+            foreach my $queue (@queue) {
+                if (!($main{$queue})) {
+                    die "[ERROR] Invalid configuration directive!: queue $queue not defined\n";
+                }
+                if (($#queue > 0) and queue_is_builtin($queue)) {
+                    die "[ERROR] builtin queue not allowed in multiple queues declaration!\n";
+                }    
+            }    
 
             if ($queue eq 'group') { push @group_stack, scalar(@regexp); }
             push @regexp, qr/$reg/;
@@ -363,16 +391,14 @@ sub config_read {
         }
     }    
 
-    close CONF; $debug && debug(2);
-    if ($opts{'C'}) { exit 0; }
+    $debug && debug(2,$config_file);
 
     if ($debug) {
-       for (my $i = 0; $i < scalar(@regexp); $i++) {
-           debug(18, $i, $regexp[$i]);
-       }
+        for (my $i = 0; $i < scalar(@regexp); $i++) {
+        debug(18, $i, $regexp[$i]);
+        }
     }
 
-    $config_read_needed = 0;
 }
 
 sub queue_is_builtin {
@@ -429,12 +455,22 @@ sub queue_mail {
     my $subject = $main{$queue}{'subject'} || $subject;
     my $smtp = Net::SMTP->new($mailserver, Timeout => 10);
         
-    if (!$smtp)                                  { print "[ERROR] could not contact $mailserver:25\n"; return; }
-    if (!$smtp->mail($main{$queue}{'mailfrom'})) { print "[ERROR] mail from: $main{$queue}{'mailfrom'} rejected!\n"; return; }
-    if (!$smtp->to(split(/,/, $main{$queue}{'mailto'}))) {
-        print "[ERROR] rcpt to: $main{$queue}{'mailto'} rejected!\n"; return;
+    if (!$smtp) { 
+        print "[ERROR] could not contact $mailserver:25\n"; 
+        return; 
     }
-    if (!$smtp->data())                          { print "[ERROR] data rejected!\n"; return; }
+    if (!$smtp->mail($main{$queue}{'mailfrom'})) { 
+        print "[ERROR] mail from: $main{$queue}{'mailfrom'} rejected!\n"; 
+        return; 
+    }
+    if (!$smtp->to(split(/,/, $main{$queue}{'mailto'}))) {
+        print "[ERROR] rcpt to: $main{$queue}{'mailto'} rejected!\n"; 
+        return;
+    }
+    if (!$smtp->data()) { 
+        print "[ERROR] data rejected!\n"; 
+        return; 
+    }
 
     $smtp->datasend("From: $main{$queue}{'mailfrom'}\n");
     $smtp->datasend("To: $main{$queue}{'mailto'}\n");
@@ -443,17 +479,17 @@ sub queue_mail {
     $smtp->datasend("X-tenshi-hostname: $hostname\n");
  
     if (!$main{$queue}{'now'}) {
-	my @now = localtime();
+        my @now = localtime();
         $main{$queue}{'report_time'} = [ @startup_time ] if (!$main{$queue}{'report_time'});
         $smtp->datasend("X-tenshi-report-start: " . strftime("%a %b %d %H:%M:%S $timezone %Y", @{$main{$queue}{'report_time'}}) . "\n");
         $main{$queue}{'report_time'} = [ @now ];
-    }	
+    }
     
     $smtp->datasend("Subject: $subject [$queue]\n\n");
 
     if ($status) {
         $smtp->datasend("*** Status: $status ***\n");
-    }	
+    }
     foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
 
         my $index = 0;
@@ -574,10 +610,10 @@ sub cron_spec_to_mask {
             }
 
             for (my $j = $start; $j <= $end; $j += $skip) {
-	    	if (($j == $end) && $cron_spec->{'wrap'} && ($j == $cron_spec->{'max'})) {
-                	$mask_fields[$cron_spec->{'min'}] = 1;
-			last;
-		}
+                if (($j == $end) && $cron_spec->{'wrap'} && ($j == $cron_spec->{'max'})) {
+                    $mask_fields[$cron_spec->{'min'}] = 1;
+                    last;
+                }
                 $mask_fields[$j] = 1;
             }
 
@@ -612,9 +648,9 @@ sub debug {
 
     my @debug_msg;
 
-    $debug_msg[0]  = "[CONF]  reading config file\n";
+    $debug_msg[0]  = "[CONF]  reading config file $_[1]\n";
     $debug_msg[1]  = "[CONF]  parsing conf directive - $_[1]\n";
-    $debug_msg[2]  = "[CONF]  configuration file successfully parsed\n\n";
+    $debug_msg[2]  = "[CONF]  configuration file  $_[1] successfully parsed\n";
     
     $debug_msg[3]  = "[INIT]  entering tail loop\n";
     $debug_msg[4]  = "[INIT]  saving pid $$ in $pidfile\n";
@@ -637,6 +673,17 @@ sub debug {
     $debug_msg[18] = "[REGEX] Set regex: $_[1] to: $_[2]\n";
 
     print $debug_msg[$_[0]];
+}
+
+sub usage {
+   die "tenshi 0.3.4 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-C] [-d] [-p] [-P pid_file]
+   -c configuration file
+   -C test configuration syntax 
+   -d debug mode
+   -f foreground mode
+   -p profile mode
+   -P pid file
+   -h this help\n\n";
 }
 
 # vim: set ts=4 sw=4 expandtab:

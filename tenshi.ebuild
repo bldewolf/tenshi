@@ -10,7 +10,7 @@ SRC_URI="mirror://gentoo/${P}.tar.gz
 
 LICENSE="GPL-2"
 SLOT="0"
-KEYWORDS="~x86 ~ppc ~sparc"
+KEYWORDS="~amd64 ~x86 ~ppc ~sparc"
 IUSE=""
 
 RDEPEND="dev-lang/perl

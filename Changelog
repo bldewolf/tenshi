@@ -1,3 +1,11 @@
+0.3.4
+
+- added include, includedir options for parsing external configuration files
+- added multiple queues feature
+- fixed missing USR1 signal handler
+- added filetest pragma for proper perms check when using POSIX ACL
+- added debian init file
+
 0.3.3
 
 - fixed whitespaces only lines handling in configuration file
@@ -25,13 +33,13 @@
 - added skip groups to speed parsing
 - added cron-style specs instead of time periods
 - added ability to send to multiple recipients, suggested by:
-	Marc Doumayrou <doud@rhoas.net>
+        Marc Doumayrou <doud@rhoas.net>
 - added solaris init file from Marc Doumayrou <doud@rhoas.net>
 - added logprefix option to handle non-syslog logs
 - added status messages
 - added log files perms check
 - fixed strftime portability issue, thanks goes to 
-	Andrew Eason <andrew@armstrong.edu>
+        Andrew Eason <andrew@armstrong.edu>
 
 0.2.1
 
