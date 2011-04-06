@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.8 2007/08/19
+# tenshi 0.9 2007/09/19
 # <tenshi@inversepath.com>
 #
 # Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
@@ -34,7 +34,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.8';
+my $version = '0.9';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -76,6 +76,7 @@ $debug_smtp = ($debug > 1) ? 1 : 0;
 
 my $tail_file = '/usr/bin/tail';
 my $tail_args = '-q --follow=name --retry -n 0';
+my $tail_multiple = 0;
 my $tail_pid;
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
@@ -130,6 +131,10 @@ if (!$profile) {
         }
     }
 
+    if ($main{'csv'} and ! -x $main{'csv'}{'path'}) {
+        die RED "[ERROR] $main{'csv'}{'path'}: not executable";
+    }
+
     foreach my $log (@log_files) {
         die RED "[ERROR] $log: no such file"      if (! -f $log);
         die RED "[ERROR] $log: file not readable" if (! -r $log);
@@ -149,17 +154,33 @@ if ($profile) {
 } else {
 
     if (scalar(@log_files) > 0) {
-        my $log_files = join(' ', @log_files);
 
-        $tail_pid = open(my $fh, "-|");
-        if (!defined($tail_pid)) {
-            die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
-        } elsif ($tail_pid == 0) {
-            exec("$tail_file $tail_args $log_files") or
-                die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
+        if ($tail_multiple) {
+            foreach my $log (@log_files) {
+
+                $tail_pid = open(my $fh, "-|");
+
+                if (!defined($tail_pid)) {
+                    die RED "[ERROR] could not open pipe for tail command: $!\n";
+                } elsif ($tail_pid == 0) {
+                    exec("$tail_file $tail_args $log") or
+                        die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log): $!\n";
+                }
+                $selector->add($fh);
+            }
+        } else {
+
+            $tail_pid = open(my $fh, "-|");
+
+            if (!defined($tail_pid)) {
+                die RED "[ERROR] could not open pipe for tail command: $!\n";
+            } elsif ($tail_pid == 0) {
+                my $log_files = join(' ', @log_files);
+                exec("$tail_file $tail_args $log_files") or
+                    die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
+            }
+            $selector->add($fh);
         }
-
-        $selector->add($fh);
     }
 
     if (scalar(@fifo_files) > 0) {
@@ -317,21 +338,23 @@ sub config_read {
             }
             $pid_file = $1;
         }
-        elsif (/^set\s+tail\s+(\S+)/) {
+        elsif (/^set\s+tail\s+(\S+)\s*(\S+.*)?/) {
             if ($config_read and ($1 ne $tail_file)) {
                 die debug(100,'tail');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
             $tail_file = $1;
+            $tail_args = $2 || $tail_args;
         }
-        elsif (/^set\s+tailargs\s+(.+)/) {
-            if ($config_read and ($1 ne $tail_args)) {
-                die debug(100,'tailargs');
+        elsif (/^set\s+tail_multiple\s+(off|on)/) {
+            if ($config_read and ($1 ne $tail_multiple)) {
+                die debug(100,'tail_multiple');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
-            $tail_args = $1;
+            if ($1 eq 'on') { $tail_multiple = 1; }
+            else { $tail_multiple = 0; }
         }
         elsif (/^set\s+uid\s+(.+)/) {
             if ($config_read and (getpwnam($1) ne $uid)) {
@@ -373,18 +396,21 @@ sub config_read {
         elsif (/^set\s+mailserver\s+(.+)/)         { $mailserver      = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+pager_limit\s+(\d+)/)       { $pager_limit     = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+mailtimeout\s+(\d+)/)       { $mailtimeout     = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+filter\s+(\S+)\s+(\S+)/)    { $filter_file{$1} = $2; $debug && debug(1,$_); next; }
-        elsif (/^set\s+filterargs\s+(\S+)\s+(.+)/) { $filter_args{$1} = $2; $debug && debug(1,$_); next; }
-        elsif (/^set\s+sleep\s+(\d+)/)       {
+        elsif (/^set\s+filter\s+(\S+)\s+(\S+)\s*(\S+.*)?/) {
+            $filter_file{$1} = $2;
+            $filter_args{$1} = $3 || "";
+            $debug && debug(1,$_); next;
+        }
+        elsif (/^set\s+sleep\s+(\d+)/)      {
             if ($sleep > 60) { die RED "[ERROR] sleep time should be <= 60 seconds\n"; } else {
                 $sleep = $1; $debug && debug(1,$_); next;
             }
         }
-        elsif (/^set\s+logprefix\s+(.+)/)  {
+        elsif (/^set\s+logprefix\s+(.+)/)   {
             push @log_prefix, qr/$1/;
             $debug && debug(1,$_);
         }
-        elsif (/^set\s+mask(\s+(\S+))?/)   {
+        elsif (/^set\s+mask(\s+(\S+))?/)    {
             $mask        = ($1 ? $2: '');
             $mask_length = length $mask;
             $debug && debug(1,$_);
@@ -403,6 +429,10 @@ sub config_read {
                 die RED "[ERROR] '$queue' is a builtin queue\n";
             }
 
+            if ($queue eq 'csv') {
+                die RED "[ERROR] '$queue' is a special queue and must be defined with 'set csv' option\n";
+            }
+
             if ($cron_spec eq 'now') {
                 $main{$queue}{'now'} = 1;
             } else {
@@ -416,6 +446,19 @@ sub config_read {
 
             if ($subject) {
                 $main{$queue}{'subject'} = $subject;  $debug && debug(1,"queue: $queue - subject => $subject");
+            }
+
+        }
+        elsif
+        (/^set\s+csv\s+\[((?:\S+(?:\s+)?){5}|now)\]\s+(\S+)\s*(.*)?/o) {
+
+            my $cron_spec = $1;
+            ($main{'csv'}{'path'}, $main{'csv'}{'args'}) = ($2, $3);
+
+            if ($cron_spec eq 'now') {
+                $main{'csv'}{'now'} = 1;
+            } else {
+                $main{'csv'}{'cron_mask'} = cron_spec_to_mask($cron_spec);
             }
 
         }
@@ -489,9 +532,10 @@ sub config_read {
         else {
 
             die RED "[ERROR] Invalid configuration directive: $_\n";
-
         }
     }
+
+    close $CONF;
 
     die RED "[ERROR] no smtp server specified" if (!$mailserver);
 
@@ -645,6 +689,12 @@ sub queues_check {
         next if queue_is_builtin($queue);
 
         if ($main{$queue}{'now'} || ($check_crons && cron_mask_match(\@time, $main{$queue}{'cron_mask'}))) {
+
+            if ($queue eq 'csv') {
+                csv_out();
+                next;
+            }
+
             queue_mail($queue) if (!$profile);
         }
     }
@@ -655,6 +705,12 @@ sub queues_flush {
 
     foreach my $queue (keys %main) {
         next if queue_is_builtin($queue);
+
+        if ($queue eq 'csv') {
+            csv_out();
+            next;
+        }
+
         queue_mail($queue) if (!$profile);
     }
     if ($status) { $status = 0; }
@@ -756,14 +812,60 @@ sub queue_mail {
         open(my $filter, "$filter_file{$queue} $filter_args{$queue} < $tmp|") or
             die RED "[ERROR] '$filter_file{$queue} $filter_args{$queue} < $tmp' failed: $!\n";
 
-        while (<$filter>) { push  @lines, $_; }
+        while (<$filter>) { push @lines, $_; }
     } else {
-        while (<$tmp>)    { push  @lines, $_; }
+        while (<$tmp>)    { push @lines, $_; }
     }
 
     $smtp->datasend(@lines);
     $smtp->quit;
     $main{$queue}{'logs'} = {};
+}
+
+sub csv_out {
+    #FIXME: too much code duplication here, need better functions
+
+    return unless (keys %{$main{'csv'}{'logs'}});
+
+    if (!$main{'csv'}{'now'}) {
+        my @now = localtime();
+        $main{'csv'}{'report_time'} = [ @startup_time ] if (!$main{'csv'}{'report_time'});
+        $main{'csv'}{'report_time'} = [ @now ];
+    }
+
+    my $tmp = new File::Temp(UNLINK => 1, DIR => '/tmp/', SUFFIX => '.tenshi')
+        or die RED "[ERROR] could not open temporary file: $!\n";
+    $debug && debug(19,$tmp);
+
+    foreach my $hostname (keys %{$main{'csv'}{'logs'}}) {
+
+        my $index = 0;
+        next unless (keys %{$main{'csv'}{'logs'}{$hostname}});
+
+        my @sorted_keys = sort { $main{'csv'}{'logs'}{$hostname}{$a} <=> $main{'csv'}{'logs'}{$hostname}{$b} } keys %{$main{'csv'}{'logs'}{$hostname}};
+
+        foreach my $key (@sorted_keys) {
+            print $tmp "$hostname,\"$key\",$main{'csv'}{'logs'}{$hostname}{$key}\n";
+            $index++;
+        }
+
+        # Clear regexp match count for every regexp whose left most queue is the one being mailed.
+        for (my $index = 0; $index <= $#regexp; $index++) {
+            my @q  = split(/,/, $queues[$index]);
+            $regexp_matches{$hostname}[$index] = 0 if $q[0] eq 'csv';
+        }
+    }
+
+    seek($tmp, 0, 0) or die RED "[ERROR] can't rewind $tmp->filename: $!\n";
+
+    local $SIG{CHLD} = 'IGNORE'; # FIXME it's ugly I know, need something smarter here
+
+    $debug && debug(20,"$main{'csv'}{'path'} $main{'csv'}{'args'} < $tmp");
+
+    open(my $filter, "$main{'csv'}{'path'} $main{'csv'}{'args'} < $tmp|") or
+        die RED "[ERROR] '$main{'csv'}{'path'} $main{'csv'}{'args'} < $tmp' failed: $!\n";
+
+    $main{'csv'}{'logs'} = {};
 }
 
 sub daemonize {
@@ -912,8 +1014,8 @@ sub cron_mask_match {
 
 sub debug {
 
-    if (!defined($_[1])) { $_[1] = 'unknown'; }
-    if (!defined($_[2])) { $_[2] = 'unknown'; }
+    if (!defined($_[1])) { $_[1] = 'foo'; }
+    if (!defined($_[2])) { $_[2] = 'foo'; }
 
     my (%debug_msg);
 

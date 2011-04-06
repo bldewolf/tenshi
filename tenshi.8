@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "19 Aug 2007" "version 0.8"
+.TH "tenshi" 8 "19 Sep 2007" "version 0.9"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -42,7 +42,7 @@ and then forks a deamon for monitoring the specified log files.
 .SS
 .TP
 .I -c <conf file>
-Read configuration from file. (default: /etc/tenshi/tenshi.conf)
+Read configuration from file. The default file is /etc/tenshi/tenshi.conf .
 .TP
 .I -C
 Perform a syntax check of the configuration file. The program exits after
@@ -116,25 +116,29 @@ The file containing the PID of the process, useful for start/stop
 scripts.
 .TP
 .I set logfile <log file path>
-A log file to monitor. This may be specified multiple times to watch more than
-one log file if your tail implementation supports it. This mode can be used along with
+A log file to monitor, this may be specified multiple times to watch more than
+one log file. Depending on your tail implementation you might need to use the
+.I tail_multiple
+setting for multiple files to work. This mode can be used along with
 .I fifo
 and
 .I listen
 settings.
 .TP
-.I set tail /usr/bin/tail
-Specify the location of the tail binary used for reading the log files.
-.TP
-.I set tailargs -q --follow=name --retry -n 0
-Set the arguments used for the tail command, this value must be tuned against
-your current 'tail' implementation. Default values are configured for standard
+.I set tail /usr/bin/tail -q --follow=name --retry -n 0
+Specify the path and arguments for the tail binary used for reading the log files. The invocation
+must be tuned against your current 'tail' implementation. Default values are configured for standard
 GNU coreutils tail. The
 .I --follow=name
 and
 .I --retry
 flags should deal properly with log rotation, if missing on your implementation we suggest that you use
 something like 'cp /dev/null logfile' as a safe way for clearing the log file upon rotation.
+.TP
+.I set tail_multiple <on|off>
+Some tail implementations do not handle more than one log file. When this option is enabled multiple
+tail commands will be forked, instead of a single command with multiple arguments. This
+option is disabled by default.
 .TP
 .I set fifo <fifo path>
 A FIFO file to monitor. This option allows you to use a syslog-ng
@@ -210,22 +214,27 @@ This option turns on automatic stripping of 'foo[1234]:' style PID strings from
 the start of log lines i.e. 'foo[1234]:' becomes 'foo:'. This allows you to
 write regexs without worrying about masking the PID. Bear in mind that any time
 you change this option you will need to re-write your regex rules or they will
-not work.
+not work. This option is disabled by default.
 .TP
-.I set filter <queue> <filter path>
+.I set filter <queue> <filter path> <arguments>
 When this option is enabled all reports matching the specified queue will be passed
 as STDIN to the specified filter, the resulting output is sent via smtp instead of
 the original report. The full path of the filter application must be specified.
 .TP
-.I set filterargs <queue> <arguments>
-Set the arguments used for the filter command.
-.I set report_order <descending|ascending>
-Controls order of log lines in reports. When set to descending (default) lines with
-most occurrences will be reported first.
+.I set csv <cron_spec> <filter path> <arguments>
+This feature allows periodic reporting, using a five-field cron-style specification like
+the
+.I set queue
+option, to the specified filter. The output is pre-formatted as CSV (Comma Separated Values)
+with hostname,log,hits format. This feature was coded for using
+.BI AfterGlow
+.BI (http://afterglow.sf.net)
+as a filter and graphing tenshi output. Check the FAQ for sample usage.
 .TP
-.I set sort_order descending
-The sorting order for reports, it can be either descending or ascending. The number of messages
-is used as a key for sorting the log messages.
+.I set sort_order <descending|ascending>
+The sorting order for reports. It can be either descending or ascending, the
+number of messages is used as a key for sorting the log messages. The default
+order is ascending.
 .LP
 
 .I QUEUES OPTIONS
@@ -428,6 +437,9 @@ group_end
 mail ^ipop3d: Login user=(.+)
 
 .br
+critical,report ^sshd: Illegal user
+
+.br
 general,urgent:200,critical:1000 ^sshd: Illegal user
 
 .br
@@ -490,6 +502,10 @@ in your perl installation, otherwise you can grab it at http://www.cpan.org or
 using the CPAN shell (`perl -e shell -MCPAN`).
 
 .SH BUGS
+.br
+- Double quotation characters present in your logs might break csv output (depending on how you pipe/process
+  it in the filter) since there's no escape code (yet).
+.br
 
 Please report any bugs you find at
 .BI http://dev.inversepath.com/trac/tenshi/report

@@ -1,15 +1,16 @@
 # Noddy Makefile for dist
+# $Id$
 
-VERSION = 0.8
+VERSION = 0.9
 
 bindir = /usr/sbin
 sysconfdir = /etc
 docdir = /usr/share/doc/tenshi-${VERSION}
-mandir = /usr/man
+mandir = /usr/share/man
 libdir = /var/lib/tenshi
 
-DOCS = README INSTALL CREDITS LICENSE Changelog
-SAMPLES = tenshi.conf tenshi.debian-init tenshi.gentoo-init tenshi.solaris-init
+DOCS = README INSTALL CREDITS LICENSE Changelog FAQ
+SAMPLES = tenshi.conf tenshi.debian-init tenshi.gentoo-init tenshi.solaris-init tenshi.redhat-init tenshi.spec
 BIN = Makefile tenshi
 MAN = tenshi.8
 
