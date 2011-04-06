@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "15 Jul 2004" "version 0.3"
+.TH "tenshi" 8 "21 Jul 2004" "version 0.3.1"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -43,7 +43,7 @@ and then forks a deamon for monitoring the specified log files.
 Read configuration from file. (default: /etc/tenshi/tenshi.conf)
 .TP
 .I -d
-Enable debug mode. In this mode the main process remains in foreground.
+Enable debug mode. In this mode the main process remains in the foreground.
 .TP
 .I -p
 Enable profiling mode. In this mode the main process remains in the foreground
@@ -74,24 +74,35 @@ options and HUP tenshi it will die. You have been warned.
 The file containing the PID of the process, useful for start/stop
 scripts.
 .TP
-.I set logfile /var/log/tenshi.log
+.I set logfile <log file path>
 A log file to monitor. This may be specified multiple times to watch more than
 one log file. 
 .TP
-.I set tail <tail command path>
-Use the standard tail command (usually located at /usr/bin/tail) for tailing the
-log file.
+.I set tail /usr/bin/tail
+Specify the location of the tail binary used for reading the log files.
+.TP
+.I set tailargs -q --follow=name --retry -n 0
+Set the arguments used for the tail command, this value must be tuned against your current 'tail'
+implementation. Default values are configured for standard GNU coreutils tail. The
+.I --follow=name
+and
+.I --retry
+flags should deal properly with log rotation, if missing on your implementation we suggest that you use
+something like 'cp /dev/null logfile' as a safe way for clearing the log file upon rotation.
 .TP
 .I set fifo <fifo path>
 Use a FIFO instead of a file. This overrides
-.I set log file
+.I set logfile
 and
 .I set tail
 since we are not using a standard file. This option allows to use a syslog-ng
 .I pipe()
 destination (or any other syslog implementation that allows FIFO usage). Unlike
 .I set logfile
-this option can be specified only once.
+this option can be specified only once. This option is meant to be used only when the installed 'tail' 
+binary doesn't behave properly with FIFOs, please test your tail implementation
+before using this. A suitable test is 'echo foo | tail -f', if this dies complaining of an illegal seek, 
+you have a broken version of tail installed. GNU tail is broken in this way, most BSD tails will work.
 .LP
 
 .I DYNAMIC OPTIONS
@@ -109,9 +120,10 @@ The maximum number of messages per hostname allowed in a report, any lines after
 the maximum will be omitted and a warning included. If this option is omitted then no limit is applied.
 .TP
 .I set logprefix <regexp> 
-All valid syslog messages are parsed by default while non-syslog ones are discarded. This option allows
-to define additional valid prefixes for watching other type of logs. If the regexp is matched then the
-prefix is removed from the log and the first grouped string is used for the hostname field.
+All valid syslog messages are parsed by default, while non-syslog ones are discarded. This option allows
+to define an additional valid prefix for watching other type of logs. If the regexp is matched then the
+prefix is removed from the log and the first grouped string is used for the hostname field. This may be 
+specified multiple times to watch many different non-syslog logs.
 .TP
 .I set mask ______
 The mask for strings enclosed by the grouping operators ( ). See the
@@ -181,7 +193,7 @@ isn't specified then the default subject will be used.
 
 Examples:
 .br
-set queue report tenshi@localhost sysadmin@localhost [* 8-18/1 * * *]
+set queue report tenshi@localhost sysadmin@localhost [0 9-17 * * *]
 .br
 set queue report tenshi@localhost sysadmin@localhost [30 18 * * *]
 .br
@@ -322,7 +334,7 @@ See the included tenshi.conf.
 
 .SH REQUIREMENTS
 
-tenshi needs a GNU 'tail' binary when using tail mode.
+tenshi needs a working 'tail' implementation.
 .br
 
 It also requires Net::SMTP module for mailing reports which should be included

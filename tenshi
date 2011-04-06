@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.3 2004/07/08
+# tenshi 0.3.1 2004/07/21
 # <tenshi@gentoo.org>
 # Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
 #
@@ -20,7 +20,7 @@ getopts('c:hdpP:', \%opts);
 if ($opts{'h'}) { usage(); }
 
 sub usage {
-   die "tenshi 0.3 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-d] [-p] [-P pid_file]
+   die "tenshi 0.3.1 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-d] [-p] [-P pid_file]
    -c configuration file
    -d debug mode
    -p profile mode
@@ -41,7 +41,9 @@ my $debug       = $opts{'d'} || 0;
 my $profile     = $opts{'p'} || 0;
 my $config_file = $opts{'c'} || '/etc/tenshi/tenshi.conf';
 my $pidfile     = $opts{'P'} || '/var/run/tenshi.pid';
+
 my $tail_file   = '/usr/bin/tail';
+my $tail_args   = '-q --follow=name --retry -n 0';
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
                'thu' => 4, 'fri' => 5, 'sat' => 6,
@@ -95,7 +97,7 @@ if (!$profile and !$fifo_file) {
 
     my $log_files = join(' ', @log_files);
 
-    open(FH, "$tail_file -q --follow=name --retry -n 0 $log_files|") or
+    open(FH, "$tail_file $tail_args $log_files|") or
         die "[ERROR] could not open pipe to tail: $!\n";
 
 } elsif (!$profile and $fifo_file) {
@@ -127,7 +129,7 @@ while (1) {
 
     if ($queue_flush_needed) { queues_flush(); $queue_flush_needed = 0; }
     if ($config_read_needed) { config_read();  $config_read_needed = 0; }
-    if ($time_to_die) { unlink $pidfile; die("Killed!\n"); }
+    if ($time_to_die) { unlink $pidfile unless ($debug || $profile); die("Killed!\n"); }
 
     my $line;
 
@@ -148,8 +150,12 @@ while (1) {
         my $hostname;
 
         chomp($line); debug(6,$line);
-        next unless map { $line =~ s/$_// ; $hostname = $1; } @log_prefix;
-        if ($hidepid)   { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
+        foreach my $log_prefix (@log_prefix) {
+            if ($line =~ s/$log_prefix//) { $hostname = $1; last; }
+        }
+        next unless $hostname;
+
+        if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
 
         for (my $index = 0; $index <= $#regexp; $index++) {
 
@@ -267,17 +273,17 @@ sub config_read {
             $pidfile = $1;
         }
         elsif (/^set\s+tail\s+(\S+)/)      { $tail_file  = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+subject\s+(.+)/)    { $subject    = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+limit\s+(\d+)/)     { $limit      = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+subject\s+(.+)/)    { $subject    = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+tailargs\s+(.+)/)   { $tail_args  = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+mailserver\s+(.+)/) { $mailserver = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+sleep\s+(\d+)/)     { 
-	    if ($sleep > 60) { die "[ERROR] sleep time should be <= 60 seconds\n"; 
-	    } else {
-	    $sleep      = $1; $debug && debug(1,$_); next; 
-	    }
-	}    
+            if ($sleep > 60) { die "[ERROR] sleep time should be <= 60 seconds\n"; } else {
+                $sleep = $1; $debug && debug(1,$_); next; 
+            }
+        }    
         elsif (/^set\s+logprefix\s+(.+)/)  {
-            push @log_prefix, qr($1);
+            push @log_prefix, qr/$1/;
             $debug && debug(1,$_);
         }    
         elsif (/^set\s+mask(\s+(\S+))?/)   {
@@ -305,8 +311,8 @@ sub config_read {
 	        $main{$queue}{'cron_mask'} = cron_spec_to_mask($cron_spec); 
             }
 
-            $main{$queue}{'mailfrom'}   = $mail_from; $debug && debug(1,"queue: $queue - mail_from => $mail_from"); 
-            $main{$queue}{'mailto'}     = $mail_to;   $debug && debug(1,"queue: $queue - mailto    => $mail_to"); 
+            $main{$queue}{'mailfrom'} = $mail_from; $debug && debug(1,"queue: $queue - mail_from => $mail_from"); 
+            $main{$queue}{'mailto'}   = $mail_to;   $debug && debug(1,"queue: $queue - mailto    => $mail_to"); 
             
 	    if ($subject) {
                 $main{$queue}{'subject'} = $subject;  $debug && debug(1,"queue: $queue - subject => $subject");
@@ -490,9 +496,6 @@ sub cron_spec_to_mask {
     my $string = shift;
     
     my @mask;
-    my $start = 0;
-    my $end   = 0;
-    my $skip  = 1;
 
     for (my $i = 0; $i < scalar(@cron_specs); $i++) {
         $string =~ s/^(\S+)\s*//o
@@ -505,6 +508,9 @@ sub cron_spec_to_mask {
         @mask_fields  = map { 0 } @mask_fields;
 
         foreach my $field (split(/,/, $1)) {
+            my $start = 0;
+            my $end   = 0;
+            my $skip  = 1;
             if ($field =~ /\*(?:\/([0-9]+))?/o) {
                 $start = $cron_spec->{'min'};
                 $end   = $cron_spec->{'max'};

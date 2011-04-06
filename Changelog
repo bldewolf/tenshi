@@ -1,3 +1,10 @@
+0.3.1
+
+- added 'set tailargs' option
+- fixed buggy logprefix implementation
+- fixed buggy cron */skip implementation
+- fixed broken cron specs examples
+
 0.3
 
 - changed name due to trademark issues
