@@ -21,7 +21,7 @@ case "$1" in
                  else
                          echo "Starting tenshi using $tenshiconf "
                          /usr/local/bin/tenshi -c $tenshiconf
-			sleep 2
+                         sleep 2
                          echo "forked at Pid `cat /var/run/tenshi.pid`"
                          echo "done." ;
                  fi

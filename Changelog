@@ -1,4 +1,11 @@
-0.9
+0.9.1                                                   (20071004)
+
+- improved debug messages
+- moved CHLD signal handler earlier in the code
+- fixed buggy multiple tail processes handling, thanks goes to
+        Paul B. Henson <henson@csupomona.edu>
+
+0.9                                                     (20070919)
 
 - added tail_multiple option
 - added csv option for comma separated output to custom parser
@@ -7,13 +14,13 @@
 - another round of rpm spec fixes + fd leak fix, thanks goes to
         Elan Ruusamäe <glen@delfi.ee>
 
-0.8
+0.8                                                     (20070819)
 
 - fixed some rpm spec issues
 - Added support for queue escalation.
         Heath Caldwell <hncaldwell@csupomona.edu>
 
-0.7
+0.7                                                     (20070314)
 
 - fifo option can be specified multiple times
 - logfile and fifo mode can be simultaneous
@@ -30,15 +37,15 @@
 - added RedHat init file and rpm spec from
         Steven McCoy <steven@indigorobot.com>
 
-0.6
+0.6                                                     (20060928)
 
 - added group_host feature for selective hostname matching
 
-0.5.1
+0.5.1                                                   (20060618)
 
 - fixed buggy noprefix queue implementation
 
-0.5
+0.5                                                     (20060609)
 
 - improved sanity checks
 - added debug levels, level 2 enables Net::SMTP debug messages
@@ -48,7 +55,7 @@
 - added supplementary groups clearing when dropping privileges
 - moved to ISC-style license
 
-0.4
+0.4                                                     (20060104)
 
 - added uid, gid options for setting effective UID, GID
 - added colourization of debug messages
@@ -57,7 +64,7 @@
 - added mailtimeout option
 - fixed tail, tailargs incorrectly being treated as dynamic options
 
-0.3.4
+0.3.4                                                   (20060616)
 
 - added include, includedir options for parsing external configuration files
 - added multiple queues feature
@@ -65,12 +72,12 @@
 - added filetest pragma for proper perms check when using POSIX ACL
 - added debian init file
 
-0.3.3
+0.3.3                                                   (20050318)
 
 - fixed whitespaces only lines handling in configuration file
 - added configuration check mode and checkconfig target in init scripts
 
-0.3.2
+0.3.2                                                   (20041109)
 
 - added X-tenshi-version, X-tenshi-hostname, X-tenshi-report-start headers
 - fixed orphan tail process problem, filehandle is now closed on shutdown
@@ -79,14 +86,14 @@
 - mail address specification allows local part only
 - added foreground mode
 
-0.3.1
+0.3.1                                                   (20040721)
 
 - added tailargs option
 - fixed buggy logprefix implementation
 - fixed buggy cron */skip implementation
 - fixed broken cron specs examples
 
-0.3
+0.3                                                     (20040715)
 
 - changed name due to trademark issues
 - added skip groups to speed parsing
@@ -100,13 +107,13 @@
 - fixed strftime portability issue, thanks goes to
         Andrew Eason <andrew@armstrong.edu>
 
-0.2.1
+0.2.1                                                   (20040622)
 
 - fixed missing headers in smtp code
 - added hidepid feature
 - replaced expand_repeats with builtin repeat queue
 
-0.2
+0.2                                                     (20040621)
 
 - added multiple file support
 - big performance improvements: BerkeleyDB and Storable are no longer required
@@ -120,6 +127,6 @@
 - die if our child process dies
 - removed prescan option
 
-0.1
+0.1                                                     (20040604)
 
 - first public release
