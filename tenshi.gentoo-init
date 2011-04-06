@@ -1,9 +1,14 @@
 #!/sbin/runscript
 
-opts="depend start stop reload flush"
+opts="depend start stop reload flush checkconfig"
 
 depend() {
 	need clock hostname logger
+}
+
+checkconfig() {
+	/usr/sbin/tenshi -C -c /etc/tenshi/tenshi.conf
+	return $?
 }
 
 start() {
@@ -19,20 +24,24 @@ stop() {
 }
 
 reload() {
-        if [ ! -f /var/lib/tenshi/tenshi.pid ]; then
-	    eerror "tenshi isn't running"
-	    return 1
-	fi    
-	ebegin "Reloading configuration and flushing all queues"
-	kill -HUP `cat /var/lib/tenshi/tenshi.pid` &>/dev/null
-	eend $?
+	if [ ! -f /var/lib/tenshi/tenshi.pid ]; then
+		eerror "tenshi isn't running"
+		return 1
+	fi	
+	if checkconfig; then
+		ebegin "Reloading configuration and flushing all queues"
+		kill -HUP `cat /var/lib/tenshi/tenshi.pid` &>/dev/null
+		eend $?
+	else
+		eerror "tenshi config file has syntax error, not restarting"
+	fi
 }
 
 flush() {
-        if [ ! -f /var/lib/tenshi/tenshi.pid ]; then
-	    eerror "tenshi isn't running"
-	    return 1
-	fi    
+	if [ ! -f /var/lib/tenshi/tenshi.pid ]; then
+		eerror "tenshi isn't running"
+		return 1
+	fi	
 	ebegin "Flushing all queues"
 	kill -USR2 `cat /var/lib/tenshi/tenshi.pid` &>/dev/null
 	eend $?

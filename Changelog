@@ -1,3 +1,7 @@
+0.3.3
+
+- fixed whitespaces only lines handling in configuration file
+- added configuration check mode and checkconfig target in init scripts
 
 0.3.2
 

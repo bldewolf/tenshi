@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "9 Nov 2004" "version 0.3.2"
+.TH "tenshi" 8 "18 Mar 2005" "version 0.3.3"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -11,6 +11,7 @@ tenshi - Log Monitoring and Reporting tool
 .B [ -c 
 .I configuration file
 .B ]
+.B [ -C ]
 .B [ -d ]
 .B [ -f ]
 .B [ -h ]
@@ -42,6 +43,10 @@ and then forks a deamon for monitoring the specified log files.
 .TP
 .I -c configuration file
 Read configuration from file. (default: /etc/tenshi/tenshi.conf)
+.TP
+.I -C
+Perform a syntax check of the configuration file. The program exits after parsing
+the configuration with either a return code of 0  or an error.
 .TP
 .I -d
 Enable debug messages. In this mode the main process remains in the foreground.
@@ -371,7 +376,7 @@ the Free Software Foundation; either version 2 of the License, or
 The latest version of tenshi can be found at
 .BI http://tenshi.gentoo.org
 
-Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
+Copyright 2004-2005 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@gentoo.org>
 
 .SH NOTES
 
@@ -390,4 +395,4 @@ This tool is a replacement for
 .SH AUTHORS
 tenshi was initially written by Andrea Barisani <lcars@gentoo.org>. It is now
 maintained by Andrea Barisani <lcars@gentoo.org> and Rob Holland
-<tigger@ereet.co.uk>
+<tigger@gentoo.org>

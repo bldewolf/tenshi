@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 #
-# tenshi 0.3.2 2004/10/09
+# tenshi 0.3.3 2005/03/18
 # <tenshi@gentoo.org>
-# Copyright 2004 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@ereet.co.uk>
+# Copyright 2004-2005 Andrea Barisani <lcars@gentoo.org> and Rob Holland <tigger@gentoo.org>
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,12 +19,13 @@ use POSIX qw(locale_h setsid strftime floor);
 setlocale(LC_TIME, "C");
 
 my %opts; 
-getopts('c:hdfpP:', \%opts);
+getopts('c:hdfpCP:', \%opts);
 if ($opts{'h'}) { usage(); }
 
 sub usage {
-   die "tenshi 0.3.2 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-d] [-p] [-P pid_file]
+   die "tenshi 0.3.2 <tenshi\@gentoo.org>\n\nUsage: $0 [-c conf_file] [-C] [-d] [-p] [-P pid_file]
    -c configuration file
+   -C test configuration syntax 
    -d debug mode
    -f foreground mode
    -p profile mode
@@ -170,7 +171,6 @@ while (1) {
 
             my $regexp = $regexp[$index];
             my $queue  = $queues[$index];
-            my $skip_index = $skip[$index];
 
             if ($line =~ /$regexp/) { 
 
@@ -205,8 +205,8 @@ while (1) {
 
                 last;
             }
-            elsif ($skip_index > 0) {
-                $index = ($skip_index - 1); $debug && debug(9,$skip_index,$line);
+            elsif ($skip[$index] > 0) {
+                $index = ($skip[$index] - 1); $debug && debug(9,$skip[$index],$line);
             }
         }
     }
@@ -246,9 +246,9 @@ sub config_read {
     open(CONF,$config_file) or die "[ERROR] could not open configuration file $config_file: $!\n";
 
     while (<CONF>) {
+        s/^\s+//;
         next if (/^#|^$/); 
         chomp;
-        s/^\s+//;
 
         if (/^set\s+logfile\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @log_files))) {
@@ -364,6 +364,7 @@ sub config_read {
     }    
 
     close CONF; $debug && debug(2);
+    if ($opts{'C'}) { exit 0; }
 
     if ($debug) {
        for (my $i = 0; $i < scalar(@regexp); $i++) {
