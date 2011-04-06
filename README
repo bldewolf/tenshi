@@ -1,7 +1,7 @@
 
-tenshi 0.9.1 README
-Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
-                                 Rob Holland        <rob@inversepath.com>
+tenshi 0.10 README
+Copyright 2004-2008 Andrea Barisani <andrea@inversepath.com>
+                    Rob Holland        <rob@inversepath.com>
 
 
 - What's tenshi?
@@ -92,17 +92,19 @@ host2:
 - Requirements:
 
 This is a perl program that uses 'tail' (when not using a FIFO) which should be
-included in your OS. It also requires Net::SMTP module for mailing reports which
-should be included in your perl installation, otherwise you can grab it at CPAN
-(http://www.cpan.org) or using the CPAN shell (perl -e shell -MCPAN).
+included in your OS.
+
+It also requires Net::SMTP module for mailing reports, which should be included
+in your perl installation, and IO::BufferedSelect. If you miss any of them you
+can grab them at CPAN (http://www.cpan.org) or using the CPAN shell (perl -e
+shell -MCPAN).
 
 
 - Resources:
 
 The tenshi project page is http://dev.inversepath.com/trac/tenshi
 
-Please report any bugs you find at http://dev.inversepath.com/trac/tenshi/report or
-<tenshi@inversepath.com>.
+Please report any bugs you find at <tenshi@inversepath.com>.
 
 Two mailing lists are also available:
 

@@ -10,11 +10,11 @@ $ make install
 Edit the config in /etc/tenshi/tenshi.conf
 
 Please Read The Fine Manual once through before running tenshi to make sure you
-understand whats going on.
+understand whats going on and that you satisfy the REQUIREMENTS section.
 
-Copy the tenshi.<os>-init to wherever your init scripts live. Currently we
-only have init scripts for Gentoo, Debian and Solaris but we would be very
-happy to accept init scripts for other operating systems.
+Copy the tenshi.<os>-init to wherever your init scripts live. Currently we only
+have init scripts for Gentoo, Debian and Solaris but we would be very happy to
+accept init scripts for other operating systems.
 
 Add tenshi to whatever run levels you need it to run in.
 

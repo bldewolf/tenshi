@@ -1,3 +1,16 @@
+0.10                                                    (20080313)
+
+- includedir now skips dotfiles
+- pid file is now created in debug, profile and foreground modes
+- fixed incorrect uid check not handling root user
+- fixed buggy time_to_die
+- fixed buggy tail_multiple option parsing
+- fixed empty report sending if filter program returns no output
+- fixed bug on unmatched subpatterns, thanks goes to
+        Adam James <atj@pulsewidth.org.uk>
+- die before pipe if tail_file is not readable, prevents fd leak
+- replaced IO::Select with IO::BufferedSelect, fixes parsing delay of buffered lines
+
 0.9.1                                                   (20071004)
 
 - improved debug messages

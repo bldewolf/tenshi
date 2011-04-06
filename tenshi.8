@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "04 Oct 2007" "version 0.9.1"
+.TH "tenshi" 8 "13 Mar 2008" "version 0.10"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -62,7 +62,7 @@ Enable profiling mode. In this mode the main process remains in the foreground
 and expects log lines to be fed to standard in. When it receives an EOF it will
 stop processing. No alerts will be sent in this mode, it is used solely for
 measuring tenshi's line processing speed. For example:
-time $(cat /var/log/messages|tenshi -p)
+time $(cat /var/log/messages|tenshi -p > /dev/null)
 .TP
 .I -P <pid file>
 Define the file containing the PID of the process, this overrides any 'pidfile'
@@ -497,19 +497,16 @@ See the included tenshi.conf.
 tenshi needs a working 'tail' implementation when not using FIFO mode.
 .br
 
-It also requires Net::SMTP module for mailing reports which should be included
-in your perl installation, otherwise you can grab it at http://www.cpan.org or
-using the CPAN shell (`perl -e shell -MCPAN`).
+It also requires Net::SMTP module for mailing reports, which should be included
+in your perl installation, and IO::BufferedSelect. If you miss any of them you
+can grab them at CPAN (http://www.cpan.org) or using the CPAN shell (`perl -e
+shell -MCPAN`).
 
 .SH BUGS
-.br
 - Double quotation characters present in your logs might break csv output (depending on how you pipe/process
-  it in the filter) since there's no escape code (yet).
-.br
+it in the filter) since there's no escape code (yet).
 
 Please report any bugs you find at
-.BI http://dev.inversepath.com/trac/tenshi/report
-or
 .BI <tenshi@inversepath.com>
 
 .SH TODO
@@ -574,6 +571,6 @@ It should be noted that tenshi was initially a perl rewrite of
 tenshi was initially written by Andrea Barisani. It is now
 maintained by Andrea Barisani and Rob Holland.
 
-Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
-                                 Rob Holland        <rob@inversepath.com>
+Copyright 2004-2008 Andrea Barisani <andrea@inversepath.com>
+                    Rob Holland        <rob@inversepath.com>
 

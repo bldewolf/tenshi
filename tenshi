@@ -1,10 +1,10 @@
 #!/usr/bin/perl
 #
-# tenshi 0.9.1 2007/10/04
+# tenshi 0.10 2008/03/13
 # <tenshi@inversepath.com>
 #
-# Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
-#                                  Rob Holland        <rob@inversepath.com>
+# Copyright 2004-2008 Andrea Barisani <andrea@inversepath.com>
+#                     Rob Holland        <rob@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -22,10 +22,10 @@ use strict;
 use warnings;
 use Net::SMTP;
 use File::Temp;
-use IO::Select;
 use Sys::Hostname;
 use IO::Socket::INET;
 use filetest 'access';
+use IO::BufferedSelect;
 use Term::ANSIColor qw(:constants);
 use Getopt::Long qw(:config no_ignore_case);
 use POSIX qw(locale_h setsid setuid setgid strftime floor);
@@ -34,7 +34,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.9.1';
+my $version = '0.10';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -46,7 +46,6 @@ if ($opts{'h'}) { usage(); }
 my $our_hostname = hostname();
 my @startup_time = localtime();
 my $timezone     = get_timezone();
-my $selector     = IO::Select->new();
 
 my ($uid, $gid);
 
@@ -76,8 +75,10 @@ $debug_smtp = ($debug > 1) ? 1 : 0;
 
 my $tail_file = '/usr/bin/tail';
 my $tail_args = '-q --follow=name --retry -n 0';
-my $tail_multiple = 0;
+my $tail_multiple = 'off';
 my @tail_pids;
+
+my @fhs;
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
                'thu' => 4, 'fri' => 5, 'sat' => 6,
@@ -106,20 +107,24 @@ $config_read = 1;
 
 if ($opts{'C'}) { exit 0; }
 
-if (!$uid) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
-if (!$gid) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
+if (not defined($uid)) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
+if (not defined($gid)) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
 
 if ($listen) {
     $syslog_listen_socket = IO::Socket::INET->new(
         LocalAddr => $listen,
         Proto =>     'udp'
     ) or die "[ERROR] can't bind UDP socket: $!\n";
-    $selector->add($syslog_listen_socket);
+    push @fhs, $syslog_listen_socket;
 }
 
 $SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print RED "[ERROR] Child died. Bailing out\n"; $time_to_die = 1; };
 
-daemonize() unless ($debug || $profile || $foreground);
+if ($debug || $profile || $foreground) {
+    save_pid();
+} else {
+    daemonize();
+}
 
 #
 # sanity checks
@@ -151,41 +156,47 @@ if ($profile) {
 
     open(my $fh, "-") or
         die RED "[ERROR] could not open standard input: $!\n";
-    $selector->add($fh);
+    push @fhs, $fh;
 
 } else {
 
     if (scalar(@log_files) > 0) {
 
-        if ($tail_multiple) {
+        if ($tail_multiple eq 'on') {
             foreach my $log (@log_files) {
 
                 $debug && debug(20, "$tail_file $tail_args $log");
+
+                die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
                 my $tail_pid = open(my $fh, "-|");
 
-                if (!defined($tail_pid)) {
+                if (not defined($tail_pid)) {
                     die RED "[ERROR] could not open pipe for tail command: $!\n";
                 } elsif ($tail_pid == 0) {
                     close STDERR;
-                    exec("$tail_file $tail_args $log");
+                    exec("$tail_file $tail_args $log") or
+                        die;
                 }
-                $selector->add($fh);
-                push(@tail_pids, $tail_pid);
+                push @fhs, $fh;
+                push @tail_pids, $tail_pid;
             }
         } else {
 
             my $log_files = join(' ', @log_files);
             $debug && debug(20, "$tail_file $tail_args $log_files");
+
+            die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
             my $tail_pid = open(my $fh, "-|");
 
-            if (!defined($tail_pid)) {
+            if (not defined($tail_pid)) {
                 die RED "[ERROR] could not open pipe for tail command: $!\n";
             } elsif ($tail_pid == 0) {
                 close STDERR;
-                exec("$tail_file $tail_args $log_files");
+                exec("$tail_file $tail_args $log_files") or
+                        die;
             }
-            $selector->add($fh);
-            push(@tail_pids, $tail_pid);
+            push @fhs, $fh;
+            push @tail_pids, $tail_pid;
         }
     }
 
@@ -194,12 +205,12 @@ if ($profile) {
             $debug && debug(19, "$fifo_file");
             open(my $fh, "<$fifo_file") or
                 die RED "[ERROR] could not open $fifo_file: $!\n";
-            $selector->add($fh);
+            push @fhs, $fh;
         }
     }
 }
 
-if (scalar($selector->handles) < 1) {
+if (scalar(@fhs) < 1) {
     die RED "[ERROR] No log file has been specified\n";
 }
 
@@ -216,6 +227,8 @@ $SIG{'HUP'}  = sub { $debug && debug(5, 'HUP') ; $status = 'reloading'  ; $queue
 $SIG{'USR1'} = sub { $debug && debug(5,'USR1') ; $status = 'queue check'; $queue_check_needed = 1; };
 $SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue_flush_needed = 1; };
 
+my $bs = IO::BufferedSelect->new(@fhs);
+
 while (!$time_to_die) {
 
     my $now = time;
@@ -229,19 +242,16 @@ while (!$time_to_die) {
     if ($config_reinit)      { config_read($config_file); $config_reinit      = 0; }
     if ($time_to_die)        { time_to_die(); }
 
-    my @ready = $selector->can_read($select_timeout);
+    my @ready = $bs->read_line($select_timeout);
 
-    foreach my $fh (@ready) {
-
-        my $line;
+    foreach (@ready) {
+        my ($fh, $line) = @$_;
 
         if ($listen and $fh == $syslog_listen_socket) {
-            $syslog_sender = $syslog_listen_socket->recv($line, 1024);
-
             $line =~ s/^<\d+>//;
 
             if (! ($line =~ /^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/)) {
-                my ($port, $ipaddr) = sockaddr_in($syslog_sender);
+                my ($port, $ipaddr) = sockaddr_in(getpeername($syslog_listen_socket));
 
                 if (not defined $host_lookup{$ipaddr}) {
                     $host_lookup{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
@@ -250,11 +260,9 @@ while (!$time_to_die) {
             my $time = strftime "%b %e %H:%M:%S", localtime;
             $line = sprintf("%s %s %s", $time, $host_lookup{$ipaddr}, $line);
             }
-        } else {
-            $line = <$fh>;
         }
 
-        if ($profile and eof($fh)) { print BLUE "[PROFILE] Reached end of file\n"; $time_to_die = 1; next; }
+        if ($profile and not defined($line)) { print BLUE, "[PROFILE] Reached end of file\n"; $time_to_die = 1; next; }
 
         parse_line($line);
     }
@@ -314,6 +322,7 @@ sub config_read {
             $debug && debug(1,$_);
             opendir(my $DIR, $1) or die RED "[ERROR] could not open directory $1: $!\n";
             foreach my $file (sort readdir($DIR)) {
+                next if ($file =~ /^\./);
                 next unless -f "$1/$file";
                 config_read("$1/$file");
             }
@@ -360,8 +369,8 @@ sub config_read {
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
-            if ($1 eq 'on') { $tail_multiple = 1; }
-            else { $tail_multiple = 0; }
+            if ($1 eq 'on') { $tail_multiple = 'on'; }
+            else { $tail_multiple = 'off'; }
         }
         elsif (/^set\s+uid\s+(.+)/) {
             if ($config_read and (getpwnam($1) ne $uid)) {
@@ -488,7 +497,7 @@ sub config_read {
                 if (!($main{$queue})) {
                     die RED "[ERROR] Invalid configuration directive: queue $queue not defined\n";
                 }
-                if (($#queue > 0) and queue_is_builtin($queue)) {
+                if ((scalar(@queue) > 1) and queue_is_builtin($queue)) {
                     die RED "[ERROR] builtin queue not allowed in multiple queues declaration\n";
                 }
                 if (($queue =~ /:/) && queue_is_builtin($queue)) {
@@ -579,7 +588,7 @@ sub parse_line {
             $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
         }
 
-        return unless $hostname;
+        return unless defined($hostname);
 
         if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
 
@@ -618,6 +627,7 @@ sub parse_line {
                 my ($begin, $end);
 
                 foreach my $i (1 .. $#-) {
+                    next unless defined($-[$i]);
 
                     $begin = $-[$i] + $offset;
                     $end   = $+[$i] + $offset;
@@ -729,42 +739,6 @@ sub queue_mail {
     return unless (keys %{$main{$queue}{'logs'}});
     $debug && debug(11,$queue);
 
-    my $smtp = Net::SMTP->new($mailserver, Timeout => $mailtimeout, Debug => $debug_smtp);
-
-    if (!$smtp) {
-        print RED "[ERROR] could not contact $mailserver:25\n";
-        return;
-    }
-    if (!$smtp->mail($main{$queue}{'mailfrom'})) {
-        print RED "[ERROR] mail from: $main{$queue}{'mailfrom'} rejected\n";
-        return;
-    }
-    if (!$smtp->to(split(/,/, $main{$queue}{'mailto'}))) {
-        print RED "[ERROR] rcpt to: $main{$queue}{'mailto'} rejected\n";
-        return;
-    }
-    if (!$smtp->data()) {
-        print RED "[ERROR] data rejected\n";
-        return;
-    }
-
-    my $subject = $main{$queue}{'subject'} || $subject;
-
-    $smtp->datasend("From: $main{$queue}{'mailfrom'}\n");
-    $smtp->datasend("To: $main{$queue}{'mailto'}\n");
-    $smtp->datasend("Date: " . strftime("%a, %d %b %Y %H:%M:%S $timezone", localtime()) . "\n");
-    $smtp->datasend("X-tenshi-version: $version\n");
-    $smtp->datasend("X-tenshi-hostname: $our_hostname\n");
-
-    if (!$main{$queue}{'now'}) {
-        my @now = localtime();
-        $main{$queue}{'report_time'} = [ @startup_time ] if (!$main{$queue}{'report_time'});
-        $smtp->datasend("X-tenshi-report-start: " . strftime("%a %b %d %H:%M:%S $timezone %Y", @{$main{$queue}{'report_time'}}) . "\n");
-        $main{$queue}{'report_time'} = [ @now ];
-    }
-
-    $smtp->datasend("Subject: $subject [$queue]\n\n");
-
     my $tmp = new File::Temp(UNLINK => 1, DIR => '/tmp/', SUFFIX => '.tenshi')
         or die RED "[ERROR] could not open temporary file: $!\n";
     $debug && debug(19,$tmp);
@@ -823,6 +797,43 @@ sub queue_mail {
         while (<$tmp>)    { push @lines, $_; }
     }
 
+    return unless (scalar(@lines) > 0);
+
+    my $smtp = Net::SMTP->new($mailserver, Timeout => $mailtimeout, Debug => $debug_smtp);
+
+    if (!$smtp) {
+        print RED "[ERROR] could not contact $mailserver:25\n";
+        return;
+    }
+    if (!$smtp->mail($main{$queue}{'mailfrom'})) {
+        print RED "[ERROR] mail from: $main{$queue}{'mailfrom'} rejected\n";
+        return;
+    }
+    if (!$smtp->to(split(/,/, $main{$queue}{'mailto'}))) {
+        print RED "[ERROR] rcpt to: $main{$queue}{'mailto'} rejected\n";
+        return;
+    }
+    if (!$smtp->data()) {
+        print RED "[ERROR] data rejected\n";
+        return;
+    }
+
+    my $subject = $main{$queue}{'subject'} || $subject;
+
+    $smtp->datasend("From: $main{$queue}{'mailfrom'}\n");
+    $smtp->datasend("To: $main{$queue}{'mailto'}\n");
+    $smtp->datasend("Date: " . strftime("%a, %d %b %Y %H:%M:%S $timezone", localtime()) . "\n");
+    $smtp->datasend("X-tenshi-version: $version\n");
+    $smtp->datasend("X-tenshi-hostname: $our_hostname\n");
+
+    if (!$main{$queue}{'now'}) {
+        my @now = localtime();
+        $main{$queue}{'report_time'} = [ @startup_time ] if (!$main{$queue}{'report_time'});
+        $smtp->datasend("X-tenshi-report-start: " . strftime("%a %b %d %H:%M:%S $timezone %Y", @{$main{$queue}{'report_time'}}) . "\n");
+        $main{$queue}{'report_time'} = [ @now ];
+    }
+
+    $smtp->datasend("Subject: $subject [$queue]\n\n");
     $smtp->datasend(@lines);
     $smtp->quit;
     $main{$queue}{'logs'} = {};
@@ -882,23 +893,26 @@ sub daemonize {
     $) = "$gid $gid"            or die RED "[ERROR] can't reset supplementary groups: $!\n";
     setgid($gid)                or die RED "[ERROR] can't setgid to $gid: $!\n";
     setuid($uid)                or die RED "[ERROR] can't setuid to $uid: $!\n";
+    save_pid();
+    close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
+}
 
+sub save_pid {
     open (PIDFILE,">$pid_file") or die RED "[ERROR] could not open pid file $pid_file: $!\n";
     print PIDFILE $$; $debug && debug(4,$$);
     close PIDFILE;
-    close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
 }
 
 sub time_to_die {
     local $SIG{CHLD} = 'IGNORE';
-    unlink $pid_file unless ($debug || $profile);
+    unlink $pid_file;
 
-    if ($#tail_pids > 0) {
+    if (scalar(@tail_pids) > 0) {
       debug(21, join(' ', @tail_pids));
       kill("SIGTERM", @tail_pids);
     }
 
-    foreach my $fh ($selector->handles) {
+    foreach my $fh (@fhs) {
         close $fh;
         if ($listen and $fh == $syslog_listen_socket) {
             $syslog_listen_socket->close();
@@ -1100,9 +1114,9 @@ sub debug {
 }
 
 sub usage {
-   die "tenshi $version     http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004, 2005, 2006, 2007 Andrea Barisani || <andrea\@inversepath.com>
-                                     Rob Holland ||    <rob\@inversepath.com>\n
+   die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
+Copyright 2004-2008                Andrea Barisani || <andrea\@inversepath.com>
+                                       Rob Holland ||    <rob\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax
