@@ -3,12 +3,12 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "14 Mar 2007" "version 0.7"
+.TH "tenshi" 8 "19 Aug 2007" "version 0.8"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
-.B tenshi 
-.B [ -c 
+.B tenshi
+.B [ -c
 .I <conf file>
 .B ]
 .B [ -C ]
@@ -27,15 +27,15 @@ regular expressions are assigned to queues which have an alert interval and a
 list of mail recipients.
 
 Queues can be set to send a notification as soon as there is a log line
-assigned to it, or to send periodic reports. 
+assigned to it, or to send periodic reports.
 
 Additionally, uninteresting fields in the log lines (such as PID numbers) can
 be masked with the standard regular expression grouping operators ( ). This
 allows cleaner and more readable reports. All reports are separated by hostname
 and all messages are condensed when possible.
 
-The program reads a configuration file 
-.RI ( tenshi.conf ) 
+The program reads a configuration file
+.RI ( tenshi.conf )
 and then forks a deamon for monitoring the specified log files.
 
 .SH OPTIONS
@@ -50,7 +50,7 @@ parsing the configuration with either a return code of 0 or an error.
 .TP
 .I -d <debug level>
 Enable debug messages. Default level is 1 if none is specified, level 2 enables
-SMTP connection debug messages. In this mode the main process remains in the 
+SMTP connection debug messages. In this mode the main process remains in the
 foreground.
 .TP
 .I -f
@@ -86,7 +86,7 @@ Parse the specified configuration file.
 .TP
 .I includedir <directory>
 Parse all files inside <directory>. The files will be parsed in alphabetical
-order, keep in mind that regexps order matters so 
+order, keep in mind that regexps order matters so
 .I includedir
 should be used carefully, see
 .I REGEXP DEFINITIONS
@@ -106,7 +106,7 @@ Specify the effective user ID of the process when in daemon mode. The user must
 be able to read the selected log files, the configuration file and write the
 specified pid file. Never use privileged users here since it's not usually
 necessary (log files perms can be set accordingly with most syslog
-implementations). 
+implementations).
 .TP
 .I set gid tenshi
 Specify the effective group ID of the process when in daemon mode.
@@ -120,7 +120,7 @@ A log file to monitor. This may be specified multiple times to watch more than
 one log file if your tail implementation supports it. This mode can be used along with
 .I fifo
 and
-.I listen 
+.I listen
 settings.
 .TP
 .I set tail /usr/bin/tail
@@ -140,11 +140,11 @@ something like 'cp /dev/null logfile' as a safe way for clearing the log file up
 A FIFO file to monitor. This option allows you to use a syslog-ng
 .I pipe()
 destination (or any other syslog implementation that allows FIFO usage). This may be
-specified multiple times to watch more than one fifo file. This option is meant to be used 
+specified multiple times to watch more than one fifo file. This option is meant to be used
 only when the installed 'tail' binary doesn't behave properly with FIFOs, please
 test your tail implementation before using this. A suitable test is 'echo foo |
 tail -f', if this dies complaining of an illegal seek, you have a broken
-version of tail installed.  GNU tail is broken in this way, most BSD tails will
+version of tail installed. GNU tail is broken in this way, most BSD tails will
 work. This mode can be used along with
 .I logfile
 and
@@ -152,14 +152,14 @@ and
 settings .
 .TP
 .I set listen 0.0.0.0:514
-Enables syslog server mode. With this option tenshi will bind to the specified address:port 
-pair and read messages acting like a syslog server. We always recommend to filter the port 
+Enables syslog server mode. With this option tenshi will bind to the specified address:port
+pair and read messages acting like a syslog server. We always recommend to filter the port
 accordingly and possibly use something like stunnel for encrypting the traffic. This mode can
 be used along with
 .I logfile
 and
 .I fifo
-settings. 
+settings.
 .LP
 
 .I DYNAMIC OPTIONS
@@ -182,7 +182,7 @@ The maximum number of messages per hostname allowed in pager friendly reports,
 any lines after the maximum will be omitted. If this option is omitted then no
 limit is applied.
 .TP
-.I set logprefix <regexp> 
+.I set logprefix <regexp>
 All valid syslog messages are parsed by default, while non-syslog ones are
 discarded unless the special
 .I noprefix
@@ -213,8 +213,8 @@ you change this option you will need to re-write your regex rules or they will
 not work.
 .TP
 .I set filter <queue> <filter path>
-When this option is enabled all reports matching the specified queue will be passed 
-as STDIN to the specified filter, the resulting output is sent via smtp instead of 
+When this option is enabled all reports matching the specified queue will be passed
+as STDIN to the specified filter, the resulting output is sent via smtp instead of
 the original report. The full path of the filter application must be specified.
 .TP
 .I set filterargs <queue> <arguments>
@@ -233,12 +233,12 @@ is used as a key for sorting the log messages.
 
 .br
 All messages are assigned to queues. Every queue is processed periodically
-according to its notification interval. There are four default builtin queues, 
+according to its notification interval. There are four default builtin queues,
 .I trash
 to which unwanted messages can be assigned (think /dev/null),
 .I repeat
 which is used for smart repeat messages handling,
-.I group 
+.I group
 and
 .I group_host
 , see
@@ -266,8 +266,8 @@ The mail sender for reports related to the queue.
 .TP
 .I <mail_to>
 The mail recipient(s) for reports related to the queue. Multiple address can be
-specified, separated by commas. Using the 
-.I pager: 
+specified, separated by commas. Using the
+.I pager:
 prefix enables a pager friendly report.
 .TP
 .I [<cron_spec>]
@@ -276,9 +276,9 @@ emailed. Ranges and skip values are supported as per the de facto crontab
 syntax with a few exceptions. Please see
 .I crontab
 man page for crontab syntax explanation. The supported day names are: Mon, Tue,
-Wed, Thu, Fri, Sat, Sun. Monday is 1, Sunday 0 or 7.  Supported month names
+Wed, Thu, Fri, Sat, Sun. Monday is 1, Sunday 0 or 7. Supported month names
 are: Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec. Day and Month
-names are not case sensitive.  Additionally, 'now' can be specified for
+names are not case sensitive. Additionally, 'now' can be specified for
 immediate notifications.
 .TP
 .I <subject>
@@ -288,7 +288,7 @@ isn't specified then the default subject will be used.
 
 The special
 .I noprefix
-queue can be used and defined like any other queue with the difference that it will get 
+queue can be used and defined like any other queue with the difference that it will get
 all messages that don't match any configured prefix.
 
 Examples:
@@ -299,7 +299,7 @@ set queue report tenshi@localhost sysadmin@localhost [30 18 * * *]
 .br
 set queue report tenshi@localhost sysadmin@localhost [*/10 * * * *]
 .br
-set queue critical tenshi@localhost sysadmin@localhost,noc@localhost [now] CRITICAL WARNING - 
+set queue critical tenshi@localhost sysadmin@localhost,noc@localhost [now] CRITICAL WARNING -
 .br
 set queue pager tenshi@localhost pager:sysadmin_pager@localhost,pager:noc_pager@localhost [now] ALERT
 .LP
@@ -311,7 +311,7 @@ set queue pager tenshi@localhost pager:sysadmin_pager@localhost,pager:noc_pager@
 All valid syslog messages are matched against standard perl regexps, all
 regexps are defined with the following syntax:
 .TP
-.I <queue_name>[,<queue_name>..] <regexp>
+.I <queue_name>[,<queue_name>[:<escalation_number>]..] <regexp>
 .LP
 
 The regexps are evaluated in order so a matched message is not checked against
@@ -321,6 +321,23 @@ the end of the configuration file. It's also good for performance having trash
 rules not logically connected with other matching rules at the beginning of the
 section. Multiple queues can be defined with a comma separated list, builtin
 queues cannot be used when using this syntax.
+
+.br
+If an escalation number is provided for a queue, the matched message will only
+be placed into the queue when <escalation_number> messages have matched the
+regexp. The queue will receive the message that matched the regexp at the time
+of escalation, with a count equal to the escalation number. The count of
+messages matching the regexp will be reset when the left most queue mentioned
+in the queue list is mailed.The left most queue cannot have an escalation
+number. When the number of messages that match the regexp reaches the greatest
+escalation number mentioned, escalation will begin again into the escalation
+queues, modulus the greatest escalation number. For example, using the queues
+`a,b:10,c:50', when 10 messages match the regexp, a message will go into b,
+when 50 match, one will go into c. At 60, another will go into b, and at 100,
+another into c, 110 to b, 150 to c, and so on. Escalation numbers must be
+positive integers greater than zero and must be listed in increasing order from
+left to right. All queues without escalation numbers must be listed more left
+than the queues with escalation numbers.
 
 .br
 The standard grouping operators
@@ -341,7 +358,7 @@ There is an example of this below (the sudo/su line).
 The builtin queue
 .I repeat
 can be used for special handling of "last message repeated x times" style log
-lines.  When the assigned regexps are matched the line count for the last line
+lines. When the assigned regexps are matched the line count for the last line
 received from the same host is incremented by the first grouped string. Keep in
 mind that it is possible for syslog lines to be received from remote hosts out
 of order. If this happens you should not use this feature because tenshi will
@@ -350,10 +367,10 @@ mis-report line counts.
 .br
 The builtin queue
 .I group
-can be used to group sets of regex together to speed up line matching.  If a
+can be used to group sets of regex together to speed up line matching. If a
 line fails to match a regex assigned to the group queue then tenshi will skip
-all the regex up until the next 
-.I group_end 
+all the regex up until the next
+.I group_end
 statement. Nested groups are allowed. An example of this is included below.
 
 .br
@@ -365,12 +382,12 @@ queue it is also terminated with the
 .I group_end
 statement. All regex definitions within that group will only apply if the hostname
 associated to the log entries matches the regex passed to the
-.I group_host 
+.I group_host
 definition.
 
 .br
-The regexs below assume 
-.I hidepid 
+The regexs below assume
+.I hidepid
 is turned on. If you have it turned off then you will need to add in \\[(.+)\\]
 to the regex following the progam name to get them to work.
 .br
@@ -411,7 +428,7 @@ group_end
 mail ^ipop3d: Login user=(.+)
 
 .br
-critical,report ^sshd: Illegal user
+general,urgent:200,critical:1000 ^sshd: Illegal user
 
 .br
 root ^sshd\\(pam_unix\\): session opened for user root by root\\(uid=0\\)
@@ -475,7 +492,7 @@ using the CPAN shell (`perl -e shell -MCPAN`).
 .SH BUGS
 
 Please report any bugs you find at
-.BI http://dev.inversepath.com/trac/tenshi/report 
+.BI http://dev.inversepath.com/trac/tenshi/report
 or
 .BI <tenshi@inversepath.com>
 
@@ -486,7 +503,7 @@ or
 .br
 - find/design a logo
 .br
-- everything that's reported at 
+- everything that's reported at
 .BI http://dev.inversepath.com/trac/tenshi/report
 
 Any volunteers ? ;)
@@ -509,30 +526,30 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 .SH DISTRIBUTION
 
-The tenshi project page is 
+The tenshi project page is
 .BI http://dev.inversepath.com/trac/tenshi
 
 .SH NOTES
 
-tenshi was formerly known as 
-.I wasabi 
+tenshi was formerly known as
+.I wasabi
 but the name was changed as we were informed that wasabi is a registered a
 trademark relating to another piece of software.
 
 Two mailing lists are also available:
 
-.RI < tenshi-user@lists.inversepath.com > 
-for general discussion, subscribe by sending a message to 
+.RI < tenshi-user@lists.inversepath.com >
+for general discussion, subscribe by sending a message to
 .RI < tenshi-user+subscribe@lists.inversepath.com >
 
-.RI < tenshi-announce@lists.inversepath.com > 
-for announcements, subscribe by sending a message to 
+.RI < tenshi-announce@lists.inversepath.com >
+for announcements, subscribe by sending a message to
 .RI < tenshi-announce+subscribe@lists.inversepath.com >
 
 .SH SEE ALSO
 
 It should be noted that tenshi was initially a perl rewrite of
-.I oak 
+.I oak
 .RI ( http://www.ktools.org ).
 
 .I Friedl, Jeffrey E. F. Mastering Regular Expressions, 2nd Edition. O'Reilly

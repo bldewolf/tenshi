@@ -1,3 +1,9 @@
+0.8
+
+- fixed some rpm spec issues
+- Added support for queue escalation.
+        Heath Caldwell <hncaldwell@csupomona.edu>
+
 0.7
 
 - fifo option can be specified multiple times
@@ -12,7 +18,7 @@
 - added sort_order option
 - added listen option for syslog server mode, thanks goes to
         Daniele Cortesi <dan@linux.it>
-- added RedHat init file and rpm spec from 
+- added RedHat init file and rpm spec from
         Steven McCoy <steven@indigorobot.com>
 
 0.6
@@ -25,9 +31,9 @@
 
 0.5
 
-- improved sanity checks 
-- added debug levels, level 2 enables Net::SMTP debug messages 
-- replaced Getopt::Std with Getopt::Long 
+- improved sanity checks
+- added debug levels, level 2 enables Net::SMTP debug messages
+- replaced Getopt::Std with Getopt::Long
 - filter feature is now per queue definable
 - added special noprefix queue for unprefixed logs
 - added supplementary groups clearing when dropping privileges
@@ -82,7 +88,7 @@
 - added logprefix option to handle non-syslog logs
 - added status messages
 - added log files perms check
-- fixed strftime portability issue, thanks goes to 
+- fixed strftime portability issue, thanks goes to
         Andrew Eason <andrew@armstrong.edu>
 
 0.2.1
@@ -99,7 +105,7 @@
 - replaced mda option with mailserver, now reports are handled by Net::SMTP
 - added per-queue report subjects
 - added expand_repeats option to handle "last message repeated x times" nicely
-- added profiling mode  
+- added profiling mode
 - mask option without argument now allows an empty mask
 - pidfile is removed on shutdown
 - die if our child process dies

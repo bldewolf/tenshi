@@ -1,24 +1,24 @@
 
-tenshi 0.7 README
+tenshi 0.8 README
 Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
                                  Rob Holland        <rob@inversepath.com>
 
 
 - What's tenshi?
 
-tenshi is a log monitoring program, designed to watch one or more log files for 
-lines matching user defined regular expressions and report on the matches. The 
-regular expressions are assigned to queues which have an alert interval and a 
+tenshi is a log monitoring program, designed to watch one or more log files for
+lines matching user defined regular expressions and report on the matches. The
+regular expressions are assigned to queues which have an alert interval and a
 list of mail recipients.
 
-Please read the example tenshi.conf and tenshi.8 man page for usage 
+Please read the example tenshi.conf and tenshi.8 man page for usage
 instructions.
 
 tenshi was formerly known as wasabi. The name was changed to tenshi after we
-were informed that wasabi is a registered trademark relating to another piece 
+were informed that wasabi is a registered trademark relating to another piece
 of software.
 
-It should be noted that tenshi was initially a perl rewrite of Oak 
+It should be noted that tenshi was initially a perl rewrite of Oak
 (http://www.ktools.org).
 
 
@@ -53,11 +53,11 @@ critical ^sudo: (.+) : TTY=(.+) ; PWD=(.+) ; USER=root ; COMMAND=(.+)
 misc .*
 
 
-Every ipop3d message not matched by the regexps assigned to the queue mail or 
-critical will be matched by the queue trash (a builtin null queue), any other 
+Every ipop3d message not matched by the regexps assigned to the queue mail or
+critical will be matched by the queue trash (a builtin null queue), any other
 message will be matched by queue misc. Fields enclosed in (.+) are masked.
 
-This is a sample report for the mail queue (sent every 12 hours): 
+This is a sample report for the mail queue (sent every 12 hours):
 
 
 host1:
@@ -91,9 +91,9 @@ host2:
 
 - Requirements:
 
-This is a perl program that uses 'tail' (when not using a FIFO) which should be 
-included in your OS. It also requires Net::SMTP module for mailing reports which 
-should be included in your perl installation, otherwise you can grab it at CPAN 
+This is a perl program that uses 'tail' (when not using a FIFO) which should be
+included in your OS. It also requires Net::SMTP module for mailing reports which
+should be included in your perl installation, otherwise you can grab it at CPAN
 (http://www.cpan.org) or using the CPAN shell (perl -e shell -MCPAN).
 
 
@@ -106,8 +106,8 @@ Please report any bugs you find at http://dev.inversepath.com/trac/tenshi/report
 
 Two mailing lists are also available:
 
-<tenshi-user@lists.inversepath.com> for general discussion, subscribe by sending a 
-message to <tenshi-user+subscribe@lists.inversepath.com> 
+<tenshi-user@lists.inversepath.com> for general discussion, subscribe by sending a
+message to <tenshi-user+subscribe@lists.inversepath.com>
 
-<tenshi-announce@lists.inversepath.com> for announcements, subscribe by sending a 
-message to <tenshi-announce+subscribe@lists.inversepath.com> 
+<tenshi-announce@lists.inversepath.com> for announcements, subscribe by sending a
+message to <tenshi-announce+subscribe@lists.inversepath.com>

@@ -24,7 +24,7 @@ case "$1" in
 	echo "."
 	sleep 1
 	echo -n "Starting log monitor: tenshi"
-	start-stop-daemon --start --quiet --exec /usr/sbin/tenshi 
+	start-stop-daemon --start --quiet --exec /usr/sbin/tenshi
 	echo "."
 	;;
   *)
