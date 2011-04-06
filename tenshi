@@ -1,10 +1,10 @@
 #!/usr/bin/perl
 #
-# tenshi 0.6 2006/09/28
+# tenshi 0.7 2007/03/14
 # <tenshi@inversepath.com>
 #
-# Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
-#                            Rob Holland        <rob@inversepath.com>
+# Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
+#                                  Rob Holland        <rob@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -22,7 +22,9 @@ use strict;
 use warnings;
 use Net::SMTP;
 use File::Temp;
+use IO::Select;
 use Sys::Hostname;
+use IO::Socket::INET;
 use filetest 'access';
 use Term::ANSIColor qw(:constants);
 use Getopt::Long qw(:config no_ignore_case);
@@ -32,7 +34,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.6';
+my $version = '0.7';
 
 my %opts; 
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'}, 
@@ -43,20 +45,24 @@ if ($opts{'h'}) { usage(); }
 
 my $our_hostname = hostname();
 my @startup_time = localtime();
+my $timezone     = get_timezone();
+my $selector     = IO::Select->new();
 
 my ($uid, $gid);
 
-my $last_check  = 0;
-my $last_minute = 0;
-my $sleep       = 5;
-my $mailtimeout = 10;
+my $last_check     = 0;
+my $last_minute    = 0;
+my $sleep          = 5;
+my $mailtimeout    = 10;
+my $select_timeout = 1;
 
-my $config_reinit = 1;
+my $config_reinit  = 1;
 
-my ($mailserver, $limit, $pager_limit, $fifo_file, $hidepid, $status);
+my ($mailserver, $limit, $pager_limit, $hidepid, $status, $listen);
+my (%main, %last_match, %last_queue, %filter_file, %filter_args, %host_lookup);
 my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die); 
-my (@log_files, @log_prefix, @regexp, @queues, @skip, @group_stack);
-my (%main, %last_match, %last_queue, %filter_file, %filter_args);
+my (@log_files, @fifo_files, @log_prefix, @regexp, @queues, @skip, @group_stack);
+my ($syslog_sender, $syslog_listen_socket);
 
 my $profile     = $opts{'p'} || 0;
 my $foreground  = $opts{'f'} || 0;
@@ -70,6 +76,7 @@ $debug_smtp = ($debug > 1) ? 1 : 0;
 
 my $tail_file = '/usr/bin/tail';
 my $tail_args = '-q --follow=name --retry -n 0';
+my $tail_pid;
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
                'thu' => 4, 'fri' => 5, 'sat' => 6,
@@ -91,7 +98,7 @@ my @cron_specs = (
 my $mask        = '______';
 my $mask_length = length $mask;
 my $subject     = 'tenshi report'; 
-my $timezone    = get_timezone();
+my $sort_order  = 'descending';
 
 config_read($config_file);
 $config_read = 1;
@@ -101,52 +108,74 @@ if ($opts{'C'}) { exit 0; }
 if (!$uid) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
 if (!$gid) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
 
+if ($listen) {
+    $syslog_listen_socket = IO::Socket::INET->new(
+        LocalAddr => $listen,
+        Proto =>     'udp'
+    ) or die "[ERROR] can't bind UDP socket: $!\n";
+    $selector->add($syslog_listen_socket);
+}
+
 daemonize() unless ($debug || $profile || $foreground);
 
 #
 # sanity checks
 #
-  
-foreach my $queue (@queues) {
-    if (!$profile and $filter_file{$queue} and ! -x $filter_file{$queue}) {
-        die RED "[ERROR] $filter_file{$queue}: not executable!";
-    }
-}
 
-foreach my $log (@log_files) {
-    die RED "[ERROR] $log: no such file!"      if (!$profile and ! -f $log);
-    die RED "[ERROR] $log: file not readable!" if (!$profile and ! -r $log);
+if (!$profile) {
+  
+    foreach my $queue (@queues) {
+        if ($filter_file{$queue} and ! -x $filter_file{$queue}) {
+            die RED "[ERROR] $filter_file{$queue}: not executable!";
+        } 
+    }
+
+    foreach my $log (@log_files) {
+        die RED "[ERROR] $log: no such file!"      if (! -f $log);
+        die RED "[ERROR] $log: file not readable!" if (! -r $log);
+    }
 }
 
 #
 # log file parsing 
 #
 
-if (!$profile and !$fifo_file) {
+if ($profile) {
 
-    if (scalar(@log_files) < 1) {
-        die RED "[ERROR] No log file has been specified\n";
-    }
+    open(my $fh, "-") or
+        die RED "[ERROR] could not open standard input: $!\n";
+    $selector->add($fh);
 
-    my $log_files = join(' ', @log_files);
-
-    open(FH, "$tail_file $tail_args $log_files|") or
-        die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
-
-} elsif (!$profile and $fifo_file) {
-
-    open(FH, "<$fifo_file") or
-        die RED "[ERROR] could not open $fifo_file: $!\n";
-    
 } else {
 
-    open(FH, "-") or
-        die RED "[ERROR] could not open standard input: $!\n";
+    if (scalar(@log_files) > 0) {
+        my $log_files = join(' ', @log_files);
 
+        $tail_pid = open(my $fh, "-|");
+        if (!defined($tail_pid)) {
+            die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
+        } elsif ($tail_pid == 0) {
+            exec("$tail_file $tail_args $log_files") or
+                die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
+        }
+
+        $selector->add($fh);
+    }
+
+    if (scalar(@fifo_files) > 0) {
+        foreach my $fifo_file (@fifo_files) {
+            open(my $fh, "<$fifo_file") or
+                die RED "[ERROR] could not open $fifo_file: $!\n";
+            $selector->add($fh);
+        }
+    }
+}
+
+if (scalar($selector->handles) < 1) {
+    die RED "[ERROR] No log file has been specified\n";
 }
 
 if (!($debug or $profile or $foreground)) {
-    close STDIN  or die RED "[ERROR] can't close STDIN: $!\n";
     close STDOUT or die RED "[ERROR] can't close STDOUT: $!\n";
     close STDERR or die RED "[ERROR] can't close STDERR: $!\n";
 }    
@@ -160,118 +189,50 @@ $SIG{'USR1'} = sub { $debug && debug(5,'USR1') ; $status = 'queue check'; $queue
 $SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue_flush_needed = 1; };
 $SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print RED "[ERROR] Child died. Bailing out\n"; $time_to_die = 1; };
 
-while (1) {
-    my $now = time;
-    
-    if ($now > ($last_check + $sleep)) {
-        $queue_check_needed = 1;
-    }
+while (!$time_to_die) {
+    while (my @ready = $selector->can_read($select_timeout)) {
+        foreach my $fh (@ready) {                  
 
-    if ($queue_flush_needed) { queues_flush();            $queue_flush_needed = 0; $queue_check_needed = 0; }
-    if ($queue_check_needed) { queues_check($now);        $queue_check_needed = 0; }
-    if ($config_reinit)      { config_read($config_file); $config_reinit      = 0; }
-    if ($time_to_die) { unlink $pid_file unless ($debug || $profile); close FH; die RED "Killed!\n"; }
+            my $now = time;
 
-    my $line;
-
-    eval {
-        local $SIG{'ALRM'} = sub { die };
-
-        alarm 1;
-        $line = <FH>;
-        alarm 0;
-    };
-
-    if ($profile and eof(FH)) { print BLUE "[PROFILE] Reached end of file\n"; $time_to_die = 1; next; }
-
-    if (!$@) {
-
-        if ($time_to_die) { next; }
-       
-        my $hostname;
-        my $has_prefix;
-
-        chomp($line); $debug && debug(6,$line);
-        foreach my $log_prefix (@log_prefix) {
-            if ($line =~ s/$log_prefix//) { 
-                $has_prefix = 1;
-                $hostname = $1; last; 
-            }
-        }
-
-        if (!$has_prefix && $main{'noprefix'}) {
-            $debug && debug(7,'noprefix',$line);
-            $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
-        }
-        
-        next unless $hostname;
-
-        if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
-
-        for (my $index = 0; $index <= $#regexp; $index++) {
-
-            my $regexp = $regexp[$index];
-            my $queue  = $queues[$index];
-            my @queue  = split(/,/, $queues[$index]);
-
-            if ($queue eq 'group_host') {
-                if ($hostname =~ /$regexp/) {
-                    next;
-                } elsif ($skip[$index] > 0) {
-                    $debug && debug(9,$skip[$index],$line);
-                    $index = ($skip[$index] - 1); 
-                    next;
-                }
+            if ($now > ($last_check + $sleep)) {
+                $queue_check_needed = 1;
             }
 
-            if ($line =~ /$regexp/) { 
+            if ($queue_flush_needed) { queues_flush();            $queue_flush_needed = 0; $queue_check_needed = 0; }
+            if ($queue_check_needed) { queues_check($now);        $queue_check_needed = 0; }
+            if ($config_reinit)      { config_read($config_file); $config_reinit      = 0; }
+            if ($time_to_die)        { time_to_die(); }
 
-                $debug && debug(7,$queue,$line);
-                last if ($queue eq 'trash');
-                next if ($queue eq 'group');
- 
-                if ($queue eq 'repeat' and $last_match{$hostname}) {
-                    my @last_queue = split(/,/, $last_queue{$hostname});
-                    foreach my $last_queue (@last_queue) {
-                        $main{$last_queue}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
+            my $line;
+
+            if ($listen and $fh == $syslog_listen_socket) {
+                $syslog_sender = $syslog_listen_socket->recv($line, 1024);
+                
+                $line =~ s/^<\d+>//;
+
+                if (! ($line =~ /^[A-Z][a-z]{2}\s(?:\s|\d)\d\s\d{2}:\d{2}:\d{2}\s(\S+)\s/)) {
+                    my ($port, $ipaddr) = sockaddr_in($syslog_sender);
+                
+                    if (not defined $host_lookup{$ipaddr}) {
+                        $host_lookup{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
                     }
-                    last;
+
+                my $time = strftime "%b %e %H:%M:%S", localtime;
+                $line = sprintf("%s %s %s", $time, $host_lookup{$ipaddr}, $line);
                 }
-
-                my $offset = 0;
-                my ($begin, $end);
-
-                foreach my $i (1 .. $#-) {
-
-                    $begin = $-[$i] + $offset;
-                    $end   = $+[$i] + $offset; 
-                    my $length = ($end - $begin);
-
-                    substr($line, $begin, $length, $mask); 
-
-                    $offset += ($mask_length - $length); 
-                }    
-
-                $debug && debug(8,$line);
-
-                $last_queue{$hostname} = $queue;
-                $last_match{$hostname} = $line;
-
-                foreach my $queue (@queue) {
-                    $main{$queue}{'logs'}{$hostname}{$line}++;
-                }    
-
-                last;
+            } else {
+                $line = <$fh>;
             }
-            elsif ($skip[$index] > 0) {
-                $debug && debug(9,$skip[$index],$line);
-                $index = ($skip[$index] - 1); 
-            }
-        }
+
+            if ($profile and eof($fh)) { print BLUE "[PROFILE] Reached end of file\n"; $time_to_die = 1; next; }
+
+            parse_line($line);
+        } 
     }
 }
 
-close FH;
+time_to_die();
 
 queues_flush();
 
@@ -289,6 +250,7 @@ sub config_read {
 
     if ($config_reinit) {
         %main               = ();
+        %host_lookup        = ();
         @regexp             = ();
         @queues             = ();
         @skip               = ();
@@ -321,7 +283,7 @@ sub config_read {
         if (/^includedir\s+(\S+)/) { 
             $debug && debug(1,$_);
             opendir(my $DIR, $1) or die RED "[ERROR] could not open directory $1: $!\n";
-            while (defined(my $file = readdir($DIR))) {
+            foreach my $file (sort readdir($DIR)) {
                 next unless -f "$1/$file";
                 config_read("$1/$file"); 
             }
@@ -330,30 +292,24 @@ sub config_read {
 
         if (/^set\s+logfile\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @log_files))) {
-                die RED "[ERROR] Tried to change a protected setting: logfile. Please restart tenshi for this change to take effect\n";
+                die debug(100,'logfile');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
-            }
-            if ($fifo_file) {
-                die RED "[ERROR] Tried to change from tail mode to fifo mode.\n";
             }
             push @log_files, $1; 
         }
         elsif (/^set\s+fifo\s+(\S+)/) {
-            if ($config_read and ($fifo_file ne $1)) {
-                die RED "[ERROR] Tried to change a protected setting: fifo. Please restart tenshi for this change to take effect\n";
+            if ($config_read and (!grep(/^$1$/, @fifo_files))) {
+                die debug(100,'fifo');
             } elsif (!$config_read) {
                 $debug && debug(1, $_);
             }
-            if ($#log_files > 0) {
-                die RED "[ERROR] Tried to change from fifo mode to tail mode.\n";
-            }
-            $fifo_file = $1;
+            push @fifo_files, $1;
         }
         elsif (/^set\s+pidfile\s+(\S+)/) {
             next if $opts{'P'};
             if ($config_read and ($1 ne $pid_file)) {
-                die RED "[ERROR] Tried to change a protected setting: pidfile. Please restart tenshi for this change to take effect\n";
+                die debug(100,'pidfile');
             } elsif (!$config_read and (!$opts{'P'})) {
                 $debug && debug(1,$_);
             }
@@ -361,7 +317,7 @@ sub config_read {
         }
         elsif (/^set\s+tail\s+(\S+)/) {
             if ($config_read and ($1 ne $tail_file)) {
-                die RED "[ERROR] Tried to change a protected setting: tail. Please restart tenshi for this change to take effect\n";
+                die debug(100,'tail');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -369,7 +325,7 @@ sub config_read {
         }
         elsif (/^set\s+tailargs\s+(.+)/) {
             if ($config_read and ($1 ne $tail_args)) {
-                die RED "[ERROR] Tried to change a protected setting: tailargs. Please restart tenshi for this change to take effect\n";
+                die debug(100,'tailargs');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -377,19 +333,38 @@ sub config_read {
         }
         elsif (/^set\s+uid\s+(.+)/) {
             if ($config_read and (getpwnam($1) ne $uid)) {
-                die RED "[ERROR] Tried to change a protected setting: uid. Please restart tenshi for this change to take effect\n";
+                die debug(100,'uid');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
-            $uid = getpwnam($1) or die RED "[ERROR] no such user: $1\n";
+            $uid = getpwnam($1);
+            die RED "[ERROR] no such user: $1\n" if not defined $uid;
+            if (not defined $uid) { die RED "[ERROR] no such user: $1\n"; }
         }
         elsif (/^set\s+gid\s+(.+)/) {
             if ($config_read and (getgrnam($1) ne $gid)) {
-                die RED "[ERROR] Tried to change a protected setting: gid. Please restart tenshi for this change to take effect\n";
+                die debug(100,'gid');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
-            $gid = getgrnam($1) or die RED "[ERROR] no such group: $1\n";
+            $gid = getgrnam($1);
+            if (not defined $gid) { die RED "[ERROR] no such group: $1\n"; }
+        }
+        elsif (/^set\s+listen\s+(\d+\.\d+\.\d+\.\d+:\d+)/) {
+            if ($config_read and ($1 ne $listen)) {
+                die debug(100,'listen');
+            } elsif (!$config_read) {
+                $debug && debug(1,$_);
+            }
+            $listen = $1;
+        }
+        elsif (/^set\s+sort_order\s+(\S+)/) {
+            if ($1 =~ /^(ascending|descending)$/) {
+                $sort_order = $1; 
+                $debug && debug(1,$_); next; }
+            else {
+                die RED "[ERROR] sort_order is invalid";
+            }
         }
         elsif (/^set\s+limit\s+(\d+)/)             { $limit           = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+subject\s+(.+)/)            { $subject         = $1; $debug && debug(1,$_); next; }
@@ -497,6 +472,97 @@ sub config_read {
 
 }
 
+sub parse_line {
+  
+    my $line = $_[0];
+
+    if (defined $line) {
+
+        if ($time_to_die) { next; }
+       
+        my $hostname;
+        my $has_prefix;
+
+        chomp($line); $debug && debug(6,$line);
+        foreach my $log_prefix (@log_prefix) {
+            if ($line =~ s/$log_prefix//) { 
+                $has_prefix = 1;
+                $hostname = $1; last; 
+            }
+        }
+
+        if (!$has_prefix && $main{'noprefix'}) {
+            $debug && debug(7,'noprefix',$line);
+            $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
+        }
+        
+        return unless $hostname;
+
+        if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
+
+        for (my $index = 0; $index <= $#regexp; $index++) {
+
+            my $regexp = $regexp[$index];
+            my $queue  = $queues[$index];
+            my @queue  = split(/,/, $queues[$index]);
+
+            if ($queue eq 'group_host') {
+                if ($hostname =~ /$regexp/) {
+                    next;
+                } elsif ($skip[$index] > 0) {
+                    $debug && debug(9,$skip[$index],$line);
+                    $index = ($skip[$index] - 1); 
+                    next;
+                }
+            }
+
+            if ($line =~ /$regexp/) { 
+
+                $debug && debug(7,$queue,$line);
+                last if ($queue eq 'trash');
+                next if ($queue eq 'group');
+ 
+                if ($queue eq 'repeat' and $last_match{$hostname}) {
+                    my @last_queue = split(/,/, $last_queue{$hostname});
+                    foreach my $last_queue (@last_queue) {
+                        $main{$last_queue}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
+                    }
+                    last;
+                }
+
+                my $offset = 0;
+                my ($begin, $end);
+
+                foreach my $i (1 .. $#-) {
+
+                    $begin = $-[$i] + $offset;
+                    $end   = $+[$i] + $offset; 
+                    my $length = ($end - $begin);
+
+                    substr($line, $begin, $length, $mask); 
+
+                    $offset += ($mask_length - $length); 
+                }    
+
+                $debug && debug(8,$line);
+
+                $last_queue{$hostname} = $queue;
+                $last_match{$hostname} = $line;
+
+                foreach my $queue (@queue) {
+                    $main{$queue}{'logs'}{$hostname}{$line}++;
+                }    
+
+                last;
+            }
+            elsif ($skip[$index] > 0) {
+                $debug && debug(9,$skip[$index],$line);
+                $index = ($skip[$index] - 1); 
+            }
+        }
+    }
+}
+
 sub queue_is_builtin {
     my $queue = shift;
     if (($queue eq 'trash') or ($queue eq 'repeat') or ($queue eq 'group') or ($queue eq 'group_host')) {
@@ -598,7 +664,14 @@ sub queue_mail {
         next unless (keys %{$main{$queue}{'logs'}{$hostname}});
         print $tmp "\n$hostname: \n" if (!$main{$queue}{'pager'});
 
-        foreach my $key (reverse sort { $main{$queue}{'logs'}{$hostname}{$a} <=> $main{$queue}{'logs'}{$hostname}{$b} } keys %{$main{$queue}{'logs'}{$hostname}}) {
+        my @sorted_keys;
+        if ($sort_order eq 'descending') {
+            @sorted_keys = reverse sort { $main{$queue}{'logs'}{$hostname}{$a} <=> $main{$queue}{'logs'}{$hostname}{$b} } keys %{$main{$queue}{'logs'}{$hostname}};
+        } elsif ($sort_order eq 'ascending') {
+            @sorted_keys = sort { $main{$queue}{'logs'}{$hostname}{$a} <=> $main{$queue}{'logs'}{$hostname}{$b} } keys %{$main{$queue}{'logs'}{$hostname}};
+        }
+
+        foreach my $key (@sorted_keys) {
     
             if ($main{$queue}{'pager'}) {
                 last if ($pager_limit and ($index >= $pager_limit));
@@ -647,12 +720,27 @@ sub daemonize {
     open (PIDFILE,">$pid_file") or die RED "[ERROR] could not open pid file $pid_file: $!\n";
     print PIDFILE $$; $debug && debug(4,$$);
     close PIDFILE;
+    close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
 }    
+
+sub time_to_die {
+    unlink $pid_file unless ($debug || $profile);
+
+    foreach my $fh ($selector->handles) { 
+        close $fh; 
+        if ($listen and $fh == $syslog_listen_socket) {
+            $syslog_listen_socket->close();
+        }
+    }
+    
+    kill("SIGTERM", $tail_pid) if $tail_pid;
+    die RED "Killed!\n"; 
+}
 
 sub get_timezone {
     use Time::Local;
 
-    my @time = localtime;
+    my @time = localtime();
     my $timediff = (timegm(@time) - timelocal(@time));
     return sprintf("%+03d%02d", $timediff/3600 , $timediff%3600/60);
 }    
@@ -830,14 +918,17 @@ sub debug {
     
     $debug_msg{'20'}{'msg'} = "[EXEC]  executing $_[1]\n";
     $debug_msg{'20'}{'col'} = CYAN;
+    
+    $debug_msg{'100'}{'msg'} = "[ERROR] Tried to change a protected setting: $_[1]. Please restart tenshi for this change to take effect\n";
+    $debug_msg{'100'}{'col'} = RED;
 
     print $debug_msg{$_[0]}{'col'}, $debug_msg{$_[0]}{'msg'};
 }
 
 sub usage {
-   die "tenshi $version http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004, 2005, 2006   Andrea Barisani || <andrea\@inversepath.com>
-                                 Rob Holland ||    <rob\@inversepath.com>\n
+   die "tenshi $version     http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
+Copyright 2004, 2005, 2006, 2007 Andrea Barisani || <andrea\@inversepath.com>
+                                     Rob Holland ||    <rob\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax 

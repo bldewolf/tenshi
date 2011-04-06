@@ -1,3 +1,20 @@
+0.7
+
+- fifo option can be specified multiple times
+- logfile and fifo mode can be simultaneous
+- better pipe opening method for the tail process, thanks goes to
+        Paul B. Henson <henson@csupomona.edu>
+- includedir now sorts entries alphabetically, thanks goes to
+        Andreas Niederl <rico32@gmx.net>
+- stdin is now closed as soon as possible
+- replaced alarm based timeout with IO::Select
+- minor fix of getpwnam checks
+- added sort_order option
+- added listen option for syslog server mode, thanks goes to
+        Daniele Cortesi <dan@linux.it>
+- added RedHat init file and rpm spec from 
+        Steven McCoy <steven@indigorobot.com>
+
 0.6
 
 - added group_host feature for selective hostname matching

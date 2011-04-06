@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "28 Sep 2006" "version 0.6"
+.TH "tenshi" 8 "14 Mar 2007" "version 0.7"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -117,7 +117,11 @@ scripts.
 .TP
 .I set logfile <log file path>
 A log file to monitor. This may be specified multiple times to watch more than
-one log file if your tail implementation supports it. 
+one log file if your tail implementation supports it. This mode can be used along with
+.I fifo
+and
+.I listen 
+settings.
 .TP
 .I set tail /usr/bin/tail
 Specify the location of the tail binary used for reading the log files.
@@ -133,20 +137,29 @@ flags should deal properly with log rotation, if missing on your implementation 
 something like 'cp /dev/null logfile' as a safe way for clearing the log file upon rotation.
 .TP
 .I set fifo <fifo path>
-Use a FIFO instead of a file. This overrides
-.I set logfile
-and
-.I set tail
-since we are not using a standard file. This option allows you to use a syslog-ng
+A FIFO file to monitor. This option allows you to use a syslog-ng
 .I pipe()
-destination (or any other syslog implementation that allows FIFO usage). Unlike
-.I set logfile
-this option can be specified only once. This option is meant to be used only
-when the installed 'tail' binary doesn't behave properly with FIFOs, please
+destination (or any other syslog implementation that allows FIFO usage). This may be
+specified multiple times to watch more than one fifo file. This option is meant to be used 
+only when the installed 'tail' binary doesn't behave properly with FIFOs, please
 test your tail implementation before using this. A suitable test is 'echo foo |
 tail -f', if this dies complaining of an illegal seek, you have a broken
 version of tail installed.  GNU tail is broken in this way, most BSD tails will
-work.
+work. This mode can be used along with
+.I logfile
+and
+.I listen
+settings .
+.TP
+.I set listen 0.0.0.0:514
+Enables syslog server mode. With this option tenshi will bind to the specified address:port 
+pair and read messages acting like a syslog server. We always recommend to filter the port 
+accordingly and possibly use something like stunnel for encrypting the traffic. This mode can
+be used along with
+.I logfile
+and
+.I fifo
+settings. 
 .LP
 
 .I DYNAMIC OPTIONS
@@ -206,6 +219,13 @@ the original report. The full path of the filter application must be specified.
 .TP
 .I set filterargs <queue> <arguments>
 Set the arguments used for the filter command.
+.I set report_order <descending|ascending>
+Controls order of log lines in reports. When set to descending (default) lines with
+most occurrences will be reported first.
+.TP
+.I set sort_order descending
+The sorting order for reports, it can be either descending or ascending. The number of messages
+is used as a key for sorting the log messages.
 .LP
 
 .I QUEUES OPTIONS
@@ -521,6 +541,6 @@ It should be noted that tenshi was initially a perl rewrite of
 tenshi was initially written by Andrea Barisani. It is now
 maintained by Andrea Barisani and Rob Holland.
 
-Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
-                           Rob Holland        <rob@inversepath.com>
+Copyright 2004, 2005, 2006, 2007 Andrea Barisani <andrea@inversepath.com>
+                                 Rob Holland        <rob@inversepath.com>
 
