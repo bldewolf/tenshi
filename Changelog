@@ -1,3 +1,7 @@
+0.6
+
+- added group_host feature for selective hostname matching
+
 0.5.1
 
 - fixed buggy noprefix queue implementation

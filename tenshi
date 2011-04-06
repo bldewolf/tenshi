@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.5.1 2006/06/18
+# tenshi 0.6 2006/09/28
 # <tenshi@inversepath.com>
 #
 # Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
@@ -32,7 +32,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.5.1';
+my $version = '0.6';
 
 my %opts; 
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'}, 
@@ -214,6 +214,16 @@ while (1) {
             my $queue  = $queues[$index];
             my @queue  = split(/,/, $queues[$index]);
 
+            if ($queue eq 'group_host') {
+                if ($hostname =~ /$regexp/) {
+                    next;
+                } elsif ($skip[$index] > 0) {
+                    $debug && debug(9,$skip[$index],$line);
+                    $index = ($skip[$index] - 1); 
+                    next;
+                }
+            }
+
             if ($line =~ /$regexp/) { 
 
                 $debug && debug(7,$queue,$line);
@@ -278,14 +288,15 @@ sub config_read {
     $debug && debug(0,$config_file);
 
     if ($config_reinit) {
-        %main   = ();
-        @regexp = ();
-        @queues = ();
-        @skip   = ();
-        @log_prefix       = ();
-        $main{'group'}    = {};
-        $main{'trash'}    = {};
-        $main{'repeat'}   = {};
+        %main               = ();
+        @regexp             = ();
+        @queues             = ();
+        @skip               = ();
+        @log_prefix         = ();
+        $main{'group'}      = {};
+        $main{'trash'}      = {};
+        $main{'repeat'}     = {};
+        $main{'group_host'} = {};
 
         $hidepid = 0;
 
@@ -451,7 +462,8 @@ sub config_read {
                 }    
             }    
 
-            if ($queue eq 'group') { push @group_stack, scalar(@regexp); }
+            if ($queue eq 'group')      { push @group_stack, scalar(@regexp); }
+            if ($queue eq 'group_host') { push @group_stack, scalar(@regexp); }
             push @regexp, qr/$reg/;
             push @queues, $queue;
             push @skip, 0;
@@ -464,7 +476,7 @@ sub config_read {
             }
 
             $skip[pop @group_stack] = scalar(@regexp) || 0;
-            
+
         }
         else {
 
@@ -487,7 +499,7 @@ sub config_read {
 
 sub queue_is_builtin {
     my $queue = shift;
-    if (($queue eq 'trash') or ($queue eq 'repeat') or ($queue eq 'group')) {
+    if (($queue eq 'trash') or ($queue eq 'repeat') or ($queue eq 'group') or ($queue eq 'group_host')) {
         return 1;
     }
 

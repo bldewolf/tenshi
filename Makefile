@@ -1,7 +1,7 @@
 # Noddy Makefile for dist
-# $Id: Makefile 345 2006-06-17 23:45:27Z andrea $
+# $Id: Makefile 351 2006-09-26 15:34:37Z andrea $
 
-VERSION = 0.5.1
+VERSION = 0.6
 
 bindir = /usr/sbin
 sysconfdir = /etc

@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "18 Jun 2006" "version 0.5.1"
+.TH "tenshi" 8 "28 Sep 2006" "version 0.6"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -117,7 +117,7 @@ scripts.
 .TP
 .I set logfile <log file path>
 A log file to monitor. This may be specified multiple times to watch more than
-one log file. 
+one log file if your tail implementation supports it. 
 .TP
 .I set tail /usr/bin/tail
 Specify the location of the tail binary used for reading the log files.
@@ -213,12 +213,14 @@ Set the arguments used for the filter command.
 
 .br
 All messages are assigned to queues. Every queue is processed periodically
-according to its notification interval. There are three default builtin queues, 
+according to its notification interval. There are four default builtin queues, 
 .I trash
 to which unwanted messages can be assigned (think /dev/null),
 .I repeat
-which is used for smart repeat messages handling and
-.I group
+which is used for smart repeat messages handling,
+.I group 
+and
+.I group_host
 , see
 .I REGEXP DEFINITIONS
 for details. There's also a special
@@ -330,8 +332,21 @@ The builtin queue
 .I group
 can be used to group sets of regex together to speed up line matching.  If a
 line fails to match a regex assigned to the group queue then tenshi will skip
-all the regex up until the next group_end statement.  Nested groups are
-allowed.  An example of this is included below.
+all the regex up until the next 
+.I group_end 
+statement. Nested groups are allowed. An example of this is included below.
+
+.br
+The builtin
+.I group_host
+queue can be used for selective hostname matching. Like the
+.I group
+queue it is also terminated with the
+.I group_end
+statement. All regex definitions within that group will only apply if the hostname
+associated to the log entries matches the regex passed to the
+.I group_host 
+definition.
 
 .br
 The regexs below assume 
@@ -358,6 +373,17 @@ group ^sendmail:
 mail ^sendmail: (.+): to=(.+),(.+)delay=(.+)
 .br
 mail ^sendmail: (.+): to=(.+),(.+)relay=(.+),(.+)stat=Sent
+.br
+group_end
+
+.br
+group_host mailserver1
+.br
+mail1 ^sendmail
+.br
+mail1 ^sendmail:.+
+.br
+critical,mail1 ^sendmail:.+SYSERR.+
 .br
 group_end
 
