@@ -248,7 +248,7 @@ while (!$time_to_die) {
     if ($queue_flush_needed) { queues_flush();            $queue_flush_needed = 0; $queue_check_needed = 0; }
     if ($queue_check_needed) { queues_check($now);        $queue_check_needed = 0; }
     if ($config_reinit)      { config_read($config_file); $config_reinit      = 0; }
-    if ($time_to_die)        { time_to_die(); }
+    if ($time_to_die)        { last; }
 
     my @ready = $bs->read_line($select_timeout);
 
@@ -276,9 +276,9 @@ while (!$time_to_die) {
     }
 }
 
-time_to_die();
-
 queues_flush();
+
+clean_up();
 
 exit 0;
 
@@ -927,7 +927,7 @@ sub save_pid {
     close PIDFILE;
 }
 
-sub time_to_die {
+sub clean_up {
     local $SIG{CHLD} = 'IGNORE';
     unlink $pid_file;
 
@@ -942,8 +942,6 @@ sub time_to_die {
             $syslog_listen_socket->close();
         }
     }
-
-    die RED "Killed\n";
 }
 
 sub get_timezone {
