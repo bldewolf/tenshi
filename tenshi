@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 #
-# tenshi 0.5 2006/06/09
+# tenshi 0.5.1 2006/06/18
 # <tenshi@inversepath.com>
 #
 # Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
@@ -32,7 +32,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version  = '0.5';
+my $version = '0.5.1';
 
 my %opts; 
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'}, 
@@ -189,17 +189,21 @@ while (1) {
         if ($time_to_die) { next; }
        
         my $hostname;
+        my $has_prefix;
 
         chomp($line); $debug && debug(6,$line);
         foreach my $log_prefix (@log_prefix) {
             if ($line =~ s/$log_prefix//) { 
+                $has_prefix = 1;
                 $hostname = $1; last; 
-            } elsif ($main{'noprefix'}{'mailto'}) {
-                $debug && debug(7,'noprefix',$line);
-                $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
             }
-        } 
+        }
 
+        if (!$has_prefix && $main{'noprefix'}) {
+            $debug && debug(7,'noprefix',$line);
+            $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
+        }
+        
         next unless $hostname;
 
         if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }

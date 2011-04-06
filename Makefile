@@ -1,7 +1,7 @@
 # Noddy Makefile for dist
-# $Id: Makefile 330 2006-06-06 09:09:14Z andrea $
+# $Id: Makefile 345 2006-06-17 23:45:27Z andrea $
 
-VERSION = 0.5
+VERSION = 0.5.1
 
 bindir = /usr/sbin
 sysconfdir = /etc
@@ -10,7 +10,7 @@ mandir = /usr/man
 libdir = /var/lib/tenshi
 
 DOCS = README INSTALL CREDITS LICENSE Changelog
-SAMPLES = tenshi.conf tenshi.debian-init tenshi.gentoo-init tenshi.solaris-init tenshi.ebuild
+SAMPLES = tenshi.conf tenshi.debian-init tenshi.gentoo-init tenshi.solaris-init
 BIN = Makefile tenshi
 MAN = tenshi.8
 

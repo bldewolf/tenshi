@@ -1,5 +1,5 @@
 
-tenshi 0.5 README
+tenshi 0.5.1 README
 Copyright 2004-2006 Andrea Barisani <andrea@inversepath.com>
                     Rob Holland        <rob@inversepath.com>
 
@@ -91,10 +91,10 @@ host2:
 
 - Requirements:
 
-This program uses 'tail' which should be included in your distribution. It also 
-requires Net::SMTP module for mailing reports which should be included in your 
-perl installation, otherwise you can grab it at CPAN (http://www.cpan.org) or 
-using the CPAN shell (perl -e shell -MCPAN).
+This is a perl program that uses 'tail' (when not using a FIFO) which should be 
+included in your OS. It also requires Net::SMTP module for mailing reports which 
+should be included in your perl installation, otherwise you can grab it at CPAN 
+(http://www.cpan.org) or using the CPAN shell (perl -e shell -MCPAN).
 
 
 - Resources:

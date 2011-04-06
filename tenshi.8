@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "09 Jun 2006" "version 0.5"
+.TH "tenshi" 8 "18 Jun 2006" "version 0.5.1"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -60,7 +60,7 @@ remains in the foreground, this is needed for some process supervisors.
 .I -p
 Enable profiling mode. In this mode the main process remains in the foreground
 and expects log lines to be fed to standard in. When it receives an EOF it will
-stop processing. No alerts will be sent in this mode, it is used soley for
+stop processing. No alerts will be sent in this mode, it is used solely for
 measuring tenshi's line processing speed. For example:
 time $(cat /var/log/messages|tenshi -p)
 .TP
@@ -244,7 +244,7 @@ The mail sender for reports related to the queue.
 .TP
 .I <mail_to>
 The mail recipient(s) for reports related to the queue. Multiple address can be
-specified, seperated by commas. Using the 
+specified, separated by commas. Using the 
 .I pager: 
 prefix enables a pager friendly report.
 .TP
@@ -292,7 +292,7 @@ regexps are defined with the following syntax:
 .I <queue_name>[,<queue_name>..] <regexp>
 .LP
 
-The regexps are evaluted in order so a matched message is not checked against
+The regexps are evaluated in order so a matched message is not checked against
 the subsequent regexps. Keep this in mind when assembling the configuration
 file. It's advisable to catch all messages by placing an all matching regexp at
 the end of the configuration file. It's also good for performance having trash
@@ -318,7 +318,7 @@ There is an example of this below (the sudo/su line).
 .br
 The builtin queue
 .I repeat
-can be used for special handling of "last message repreated x times" style log
+can be used for special handling of "last message repeated x times" style log
 lines.  When the assigned regexps are matched the line count for the last line
 received from the same host is incremented by the first grouped string. Keep in
 mind that it is possible for syslog lines to be received from remote hosts out
@@ -443,7 +443,7 @@ or
 - everything that's reported at 
 .BI http://dev.inversepath.com/trac/tenshi/report
 
-Any volounteers ? ;)
+Any volunteers ? ;)
 
 .SH LICENSE
 .B tenshi
