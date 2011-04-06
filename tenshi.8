@@ -3,20 +3,20 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "04 Jan 2006" "version 0.4"
+.TH "tenshi" 8 "09 Jun 2006" "version 0.5"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
 .B tenshi 
 .B [ -c 
-.I configuration file
+.I <conf file>
 .B ]
 .B [ -C ]
-.B [ -d ]
+.B [ -d <debug level> ]
 .B [ -f ]
 .B [ -h ]
 .B [ -p ]
-.B [ -P ]
+.B [ -P <pid file> ]
 
 .SH DESCRIPTION
 .LP
@@ -41,15 +41,17 @@ and then forks a deamon for monitoring the specified log files.
 .SH OPTIONS
 .SS
 .TP
-.I -c configuration file
+.I -c <conf file>
 Read configuration from file. (default: /etc/tenshi/tenshi.conf)
 .TP
 .I -C
 Perform a syntax check of the configuration file. The program exits after
-parsing the configuration with either a return code of 0  or an error.
+parsing the configuration with either a return code of 0 or an error.
 .TP
-.I -d
-Enable debug messages. In this mode the main process remains in the foreground.
+.I -d <debug level>
+Enable debug messages. Default level is 1 if none is specified, level 2 enables
+SMTP connection debug messages. In this mode the main process remains in the 
+foreground.
 .TP
 .I -f
 Enable foreground mode. In this mode the main process operates normally but
@@ -62,7 +64,7 @@ stop processing. No alerts will be sent in this mode, it is used soley for
 measuring tenshi's line processing speed. For example:
 time $(cat /var/log/messages|tenshi -p)
 .TP
-.I -P
+.I -P <pid file>
 Define the file containing the PID of the process, this overrides any 'pidfile'
 option present in the configuration file.
 
@@ -169,7 +171,9 @@ limit is applied.
 .TP
 .I set logprefix <regexp> 
 All valid syslog messages are parsed by default, while non-syslog ones are
-discarded. This option allows to define an additional valid prefix for watching
+discarded unless the special
+.I noprefix
+queue is set. This option allows to define an additional valid prefix for watching
 other type of logs. If the regexp is matched then the prefix is removed from
 the log and the first grouped string is used for the hostname field. This may
 be specified multiple times to watch many different non-syslog logs.
@@ -195,12 +199,12 @@ write regexs without worrying about masking the PID. Bear in mind that any time
 you change this option you will need to re-write your regex rules or they will
 not work.
 .TP
-.I set filter <filter path>
-When this option is enabled all reports will be passed as STDIN to the
-specified filter, the resulting output is sent via smtp instead of the original
-report. The full path of the filter application must be specified.
+.I set filter <queue> <filter path>
+When this option is enabled all reports matching the specified queue will be passed 
+as STDIN to the specified filter, the resulting output is sent via smtp instead of 
+the original report. The full path of the filter application must be specified.
 .TP
-.I set filterargs <arguments>
+.I set filterargs <queue> <arguments>
 Set the arguments used for the filter command.
 .LP
 
@@ -217,7 +221,9 @@ which is used for smart repeat messages handling and
 .I group
 , see
 .I REGEXP DEFINITIONS
-for details.
+for details. There's also a special
+.I noprefix
+queue, read further for details about it.
 .br
 
 All queues are automatically flushed before shutdown when a SIGTERM is
@@ -256,6 +262,12 @@ immediate notifications.
 .I <subject>
 This is the subject for to use for email reports regarding this queue. If this
 isn't specified then the default subject will be used.
+.LP
+
+The special
+.I noprefix
+queue can be used and defined like any other queue with the difference that it will get 
+all messages that don't match any configured prefix.
 
 Examples:
 .br
@@ -427,14 +439,27 @@ or
 - add other actions besides mail notifications
 .br
 - find/design a logo
+.br
+- everything that's reported at 
+.BI http://dev.inversepath.com/trac/tenshi/report
 
 Any volounteers ? ;)
 
 .SH LICENSE
 .B tenshi
-is free software; you can redistribute it and/or modify it under the terms of
-the GNU General Public License version 2 as published by the Free Software
-Foundation.
+is distributed under the terms of the following ISC-style license:
+
+Permission to use, copy, modify, and distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 .SH DISTRIBUTION
 
@@ -470,6 +495,6 @@ It should be noted that tenshi was initially a perl rewrite of
 tenshi was initially written by Andrea Barisani. It is now
 maintained by Andrea Barisani and Rob Holland.
 
-Copyright 2004-2006 Andrea Barisani <lcars@gentoo.org> <andrea@inversepath.com>
-                and Rob Holland    <tigger@gentoo.org> <rob@inversepath.com>
+Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
+                           Rob Holland        <rob@inversepath.com>
 

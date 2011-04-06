@@ -14,7 +14,7 @@ understand whats going on.
 
 Copy the tenshi.<distro>-init to wherever your init scripts live. Currently we
 only have init scripts for Gentoo, Debian and Solaris but we would be very
-happy to accept init scripts for other distros.
+happy to accept init scripts for other operating systems.
 
 Add tenshi to whatever run levels you need it to run in.
 
@@ -22,7 +22,7 @@ To start run as root:
 
 $ /etc/init.d/tenshi start
 
-(or whatever is appropriate for your Distro, again, comments welcome :)
+(or whatever is appropriate for your OS, again, comments welcome :) )
 
 Thats it!
 

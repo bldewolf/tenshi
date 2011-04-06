@@ -1,35 +1,47 @@
 #!/usr/bin/perl
 #
-# tenshi 0.4 2006/01/04
+# tenshi 0.5 2006/06/09
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2006 Andrea Barisani <lcars@gentoo.org> <andrea@inversepath.com>
-#                 and Rob Holland    <tigger@gentoo.org> <rob@inversepath.com>
+# Copyright 2004, 2005, 2006 Andrea Barisani <andrea@inversepath.com>
+#                            Rob Holland        <rob@inversepath.com>
 #
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License version 2 as 
-# published by the Free Software Foundation.
+# Permission to use, copy, modify, and distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above
+# copyright notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 use strict;
 use warnings;
 use Net::SMTP;
 use File::Temp;
-use Getopt::Std;
 use Sys::Hostname;
 use filetest 'access';
 use Term::ANSIColor qw(:constants);
+use Getopt::Long qw(:config no_ignore_case);
 use POSIX qw(locale_h setsid setuid setgid strftime floor);
 
 setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
+my $version  = '0.5';
+
 my %opts; 
-getopts('c:hdfpCP:', \%opts);
+GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'}, 
+           'debug:i'         => \$opts{'d'}, 'foreground' => \$opts{'f'}, 
+           'profile'         => \$opts{'p'}, 'Pid=s'      => \$opts{'P'},
+           'help'            => \$opts{'h'});
 if ($opts{'h'}) { usage(); }
 
-my $version  = '0.4';
-my $hostname = hostname();
+my $our_hostname = hostname();
 my @startup_time = localtime();
 
 my ($uid, $gid);
@@ -44,19 +56,20 @@ my $config_reinit = 1;
 my ($mailserver, $limit, $pager_limit, $fifo_file, $hidepid, $status);
 my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die); 
 my (@log_files, @log_prefix, @regexp, @queues, @skip, @group_stack);
-my (%main, %last_match, %last_queue);
+my (%main, %last_match, %last_queue, %filter_file, %filter_args);
 
-my $debug       = $opts{'d'} || 0;
 my $profile     = $opts{'p'} || 0;
 my $foreground  = $opts{'f'} || 0;
 my $config_file = $opts{'c'} || '/etc/tenshi/tenshi.conf';
 my $pid_file    = $opts{'P'} || '/var/run/tenshi.pid';
 
-my $tail_file   = '/usr/bin/tail';
-my $tail_args   = '-q --follow=name --retry -n 0';
+my ($debug, $debug_smtp);
 
-my $filter_file = 0;
-my $filter_args = "";
+$debug      = (defined($opts{'d'}) && $opts{'d'} == 0) ? 1 : $opts{'d'} || 0;
+$debug_smtp = ($debug > 1) ? 1 : 0;
+
+my $tail_file = '/usr/bin/tail';
+my $tail_args = '-q --follow=name --retry -n 0';
 
 my %days =   ( 'mon' => 1, 'tue' => 2, 'wed' => 3,
                'thu' => 4, 'fri' => 5, 'sat' => 6,
@@ -85,28 +98,29 @@ $config_read = 1;
 
 if ($opts{'C'}) { exit 0; }
 
+if (!$uid) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
+if (!$gid) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
+
+daemonize() unless ($debug || $profile || $foreground);
+
 #
-# environment sanity check
+# sanity checks
 #
   
-die RED "[ERROR] no smtp server specified!"   if (!$mailserver);
-die RED "[ERROR] $fifo_file: no such file!"   if ((!$profile and $fifo_file)         and   -f $fifo_file);
-die RED "[ERROR] $tail_file: no such file!"   if ((!$profile and scalar(@log_files)) and ! -f $tail_file);
-die RED "[ERROR] $filter_file: no such file!" if ((!$profile and $filter_file)       and ! -f $filter_file);
+foreach my $queue (@queues) {
+    if (!$profile and $filter_file{$queue} and ! -x $filter_file{$queue}) {
+        die RED "[ERROR] $filter_file{$queue}: not executable!";
+    }
+}
 
 foreach my $log (@log_files) {
     die RED "[ERROR] $log: no such file!"      if (!$profile and ! -f $log);
     die RED "[ERROR] $log: file not readable!" if (!$profile and ! -r $log);
 }
 
-if (!$uid) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
-if (!$gid) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
-
 #
 # log file parsing 
 #
-
-daemonize() unless ($debug || $profile || $foreground);
 
 if (!$profile and !$fifo_file) {
 
@@ -117,19 +131,25 @@ if (!$profile and !$fifo_file) {
     my $log_files = join(' ', @log_files);
 
     open(FH, "$tail_file $tail_args $log_files|") or
-        die RED "[ERROR] could not open pipe to tail: $!\n";
+        die RED "[ERROR] could not open pipe to tail ($tail_file $tail_args $log_files): $!\n";
 
 } elsif (!$profile and $fifo_file) {
 
     open(FH, "<$fifo_file") or
-        die RED "[ERROR] could not open fifo file: $!\n";
+        die RED "[ERROR] could not open $fifo_file: $!\n";
     
 } else {
 
     open(FH, "-") or
-        die RED "[ERROR] could not open standard in $!\n";
+        die RED "[ERROR] could not open standard input: $!\n";
 
 }
+
+if (!($debug or $profile or $foreground)) {
+    close STDIN  or die RED "[ERROR] can't close STDIN: $!\n";
+    close STDOUT or die RED "[ERROR] can't close STDOUT: $!\n";
+    close STDERR or die RED "[ERROR] can't close STDERR: $!\n";
+}    
 
 $debug && debug(3);
 
@@ -172,8 +192,14 @@ while (1) {
 
         chomp($line); $debug && debug(6,$line);
         foreach my $log_prefix (@log_prefix) {
-            if ($line =~ s/$log_prefix//) { $hostname = $1; last; }
-        }
+            if ($line =~ s/$log_prefix//) { 
+                $hostname = $1; last; 
+            } elsif ($main{'noprefix'}{'mailto'}) {
+                $debug && debug(7,'noprefix',$line);
+                $main{'noprefix'}{'logs'}{'[unprefixed logs]'}{$line}++;
+            }
+        } 
+
         next unless $hostname;
 
         if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
@@ -224,7 +250,8 @@ while (1) {
                 last;
             }
             elsif ($skip[$index] > 0) {
-                $index = ($skip[$index] - 1); $debug && debug(9,$skip[$index],$line);
+                $debug && debug(9,$skip[$index],$line);
+                $index = ($skip[$index] - 1); 
             }
         }
     }
@@ -251,10 +278,10 @@ sub config_read {
         @regexp = ();
         @queues = ();
         @skip   = ();
-        @log_prefix     = ();
-        $main{'group'}  = {};
-        $main{'trash'}  = {};
-        $main{'repeat'} = {};
+        @log_prefix       = ();
+        $main{'group'}    = {};
+        $main{'trash'}    = {};
+        $main{'repeat'}   = {};
 
         $hidepid = 0;
 
@@ -349,13 +376,13 @@ sub config_read {
             }
             $gid = getgrnam($1) or die RED "[ERROR] no such group: $1\n";
         }
-        elsif (/^set\s+limit\s+(\d+)/)       { $limit       = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+subject\s+(.+)/)      { $subject     = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+filter\s+(\S+)/)      { $filter_file = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+mailserver\s+(.+)/)   { $mailserver  = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+filterargs\s+(.+)/)   { $filter_args = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+pager_limit\s+(\d+)/) { $pager_limit = $1; $debug && debug(1,$_); next; }
-        elsif (/^set\s+mailtimeout\s+(\d+)/) { $mailtimeout = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+limit\s+(\d+)/)             { $limit           = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+subject\s+(.+)/)            { $subject         = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+mailserver\s+(.+)/)         { $mailserver      = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+pager_limit\s+(\d+)/)       { $pager_limit     = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+mailtimeout\s+(\d+)/)       { $mailtimeout     = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+filter\s+(\S+)\s+(\S+)/)    { $filter_file{$1} = $2; $debug && debug(1,$_); next; }
+        elsif (/^set\s+filterargs\s+(\S+)\s+(.+)/) { $filter_args{$1} = $2; $debug && debug(1,$_); next; }
         elsif (/^set\s+sleep\s+(\d+)/)       { 
             if ($sleep > 60) { die RED "[ERROR] sleep time should be <= 60 seconds\n"; } else {
                 $sleep = $1; $debug && debug(1,$_); next; 
@@ -442,6 +469,8 @@ sub config_read {
         }
     }    
 
+    die RED "[ERROR] no smtp server specified!" if (!$mailserver);
+
     $debug && debug(2,$config_file);
 
     if ($debug) {
@@ -504,7 +533,7 @@ sub queue_mail {
     return unless (keys %{$main{$queue}{'logs'}});
     $debug && debug(11,$queue);
 
-    my $smtp = Net::SMTP->new($mailserver, Timeout => $mailtimeout);
+    my $smtp = Net::SMTP->new($mailserver, Timeout => $mailtimeout, Debug => $debug_smtp);
         
     if (!$smtp) { 
         print RED "[ERROR] could not contact $mailserver:25\n"; 
@@ -529,7 +558,7 @@ sub queue_mail {
     $smtp->datasend("To: $main{$queue}{'mailto'}\n");
     $smtp->datasend("Date: " . strftime("%a, %d %b %Y %H:%M:%S $timezone", localtime()) . "\n");
     $smtp->datasend("X-tenshi-version: $version\n");
-    $smtp->datasend("X-tenshi-hostname: $hostname\n");
+    $smtp->datasend("X-tenshi-hostname: $our_hostname\n");
 
     if (!$main{$queue}{'now'}) {
         my @now = localtime();
@@ -572,11 +601,13 @@ sub queue_mail {
     
     seek($tmp, 0, 0) or die RED "[ERROR] can't rewind $tmp->filename: $!\n";
 
-    if ($filter_file) {
+    if ($filter_file{$queue}) {
         local $SIG{CHLD} = 'IGNORE'; # FIXME it's ugly I know, need something smarter here
         
-        open(my $filter, "$filter_file $filter_args < $tmp|") or 
-            die RED "[ERROR] '$filter_file $filter_args < $tmp' failed: $!\n";
+        $debug && debug(20,"$filter_file{$queue} $filter_args{$queue} < $tmp");
+        
+        open(my $filter, "$filter_file{$queue} $filter_args{$queue} < $tmp|") or 
+            die RED "[ERROR] '$filter_file{$queue} $filter_args{$queue} < $tmp' failed: $!\n";
       
         while (<$filter>) { push  @lines, $_; }
     } else {
@@ -593,16 +624,13 @@ sub daemonize {
     defined(my $pid = fork)     or die RED "[ERROR] can't fork: $!\n";
     exit if $pid;
     setsid()                    or die RED "[ERROR] can't start a new session: $!\n";
+    $) = "$gid $gid"            or die RED "[ERROR] can't reset supplementary groups: $!\n";
     setgid($gid)                or die RED "[ERROR] can't setgid to $gid: $!\n";
     setuid($uid)                or die RED "[ERROR] can't setuid to $uid: $!\n";
 
     open (PIDFILE,">$pid_file") or die RED "[ERROR] could not open pid file $pid_file: $!\n";
     print PIDFILE $$; $debug && debug(4,$$);
     close PIDFILE;
-
-    close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
-    close STDOUT                or die RED "[ERROR] can't close STDOUT: $!\n";
-    close STDERR                or die RED "[ERROR] can't close STDERR: $!\n";
 }    
 
 sub get_timezone {
@@ -620,8 +648,7 @@ sub cron_field_resolve {
     if (ref($strings_ref) && $strings_ref->{$field}) {
         return $strings_ref->{$field};
     }
-    else
-    {
+    else {
         return $field;
     }
 }
@@ -651,8 +678,8 @@ sub cron_spec_to_mask {
                 $end   = $cron_spec->{'max'};
                 if ($1) { $skip = $1 }
             }
-            else
-            {
+            else {
+                
                 if (!($field =~ /(\w+)(?:-(\w+)(?:\/([0-9]+))?)?/o)) {
                     die RED "[ERROR] Error in field syntax: $field\n";
                 }
@@ -734,7 +761,7 @@ sub debug {
     $debug_msg{'1'}{'msg'}  = "[CONF]  parsing conf directive - $_[1]\n";
     $debug_msg{'1'}{'col'}  = CYAN;
 
-    $debug_msg{'2'}{'msg'}  = "[CONF]  configuration file  $_[1] successfully parsed\n";
+    $debug_msg{'2'}{'msg'}  = "[CONF]  configuration file $_[1] successfully parsed\n";
     $debug_msg{'2'}{'col'}  = WHITE;
     
     $debug_msg{'3'}{'msg'}  = "[INIT]  entering tail loop\n";
@@ -753,7 +780,7 @@ sub debug {
     $debug_msg{'7'}{'col'}  = GREEN;
 
     $debug_msg{'8'}{'msg'}  = "[MAIN]  masked message: $_[1]\n";
-    $debug_msg{'8'}{'col'}  = YELLOW;
+    $debug_msg{'8'}{'col'}  = RED;
 
     $debug_msg{'9'}{'msg'}  = "[MAIN]  skipping to regex: $_[1] after failed match for group regex on line: $_[2]\n";
     $debug_msg{'9'}{'col'}  = YELLOW;
@@ -767,35 +794,38 @@ sub debug {
     $debug_msg{'13'}{'msg'} = "[QUEUE] flushing all queues\n";
     $debug_msg{'13'}{'col'} = RED;
 
-    $debug_msg{'14'}{'msg'} = "[CRON] creating cron mask from: $_[1]\n";
+    $debug_msg{'14'}{'msg'} = "[CRON]  creating cron mask from: $_[1]\n";
     $debug_msg{'14'}{'col'} = GREEN;
 
-    $debug_msg{'15'}{'msg'} = "[CRON] testing mask: $_[1] against current time: $_[2]\n";
+    $debug_msg{'15'}{'msg'} = "[CRON]  testing mask: $_[1] against current time: $_[2]\n";
     $debug_msg{'15'}{'col'} = GREEN;
 
-    $debug_msg{'16'}{'msg'} = "[CRON] test returned negative\n";
+    $debug_msg{'16'}{'msg'} = "[CRON]  test returned negative\n";
     $debug_msg{'16'}{'col'} = GREEN;
 
-    $debug_msg{'17'}{'msg'} = "[CRON] test returned positive\n";
+    $debug_msg{'17'}{'msg'} = "[CRON]  test returned positive\n";
     $debug_msg{'17'}{'col'} = GREEN;
 
     $debug_msg{'18'}{'msg'} = "[REGEX] Set regex: $_[1] to: $_[2]\n";
     $debug_msg{'18'}{'col'} = YELLOW;
     
-    $debug_msg{'19'}{'msg'} = "[FILE] opening $_[1]\n";
+    $debug_msg{'19'}{'msg'} = "[FILE]  opening $_[1]\n";
     $debug_msg{'19'}{'col'} = BLUE;
+    
+    $debug_msg{'20'}{'msg'} = "[EXEC]  executing $_[1]\n";
+    $debug_msg{'20'}{'col'} = CYAN;
 
     print $debug_msg{$_[0]}{'col'}, $debug_msg{$_[0]}{'msg'};
 }
 
 sub usage {
-   die "tenshi 0.4                    <tenshi\@inversepath.com> || http://dev.inversepath.com/tenshi
-Copyright 2004-2006 Andrea Barisani <lcars\@gentoo.org> || <andrea\@inversepath.com>
-                and Rob Holland    <tigger\@gentoo.org> || <rob\@inversepath.com>\n
-Usage: $0 [-c conf_file] [-C|-d|-f|-p] [-P pid_file]
+   die "tenshi $version http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
+Copyright 2004, 2005, 2006   Andrea Barisani || <andrea\@inversepath.com>
+                                 Rob Holland ||    <rob\@inversepath.com>\n
+Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax 
-   -d debug mode
+   -d debug level
    -f foreground mode
    -p profile mode
    -P pid file

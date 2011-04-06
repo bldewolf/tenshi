@@ -1,3 +1,13 @@
+0.5
+
+- improved sanity checks 
+- added debug levels, level 2 enables Net::SMTP debug messages 
+- replaced Getopt::Std with Getopt::Long 
+- filter feature is now per queue definable
+- added special noprefix queue for unprefixed logs
+- added supplementary groups clearing when dropping privileges
+- moved to ISC-style license
+
 0.4
 
 - added uid, gid options for setting effective UID, GID
@@ -41,7 +51,7 @@
 - changed name due to trademark issues
 - added skip groups to speed parsing
 - added cron-style specs instead of time periods
-- added ability to send to multiple recipients, suggested by:
+- added ability to send to multiple recipients, suggested by
         Marc Doumayrou <doud@rhoas.net>
 - added solaris init file from Marc Doumayrou <doud@rhoas.net>
 - added logprefix option to handle non-syslog logs
