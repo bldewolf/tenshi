@@ -239,6 +239,14 @@ with log messages and, if found, reports it along with the original one. This on
 and not pager messages. The name resolution is cached in order to avoid re-resolving addresses that
 have been seen already, you have to restart or HUP tenshi in order to flush the cache. This option
 is disabled by default.
+.TP
+.I set threshold <queue> <count> <regex>
+This option can be used to discard lines from a report that have a count below
+the given threshold. If a line matches the regex in the given queue but has
+fewer hits than count, it is discarded and omitted from the report. Note that
+this matches on the content of the lines that will actually appear in the
+report, in contrast to queue escalation which uses a count based on the regex
+that is matched.
 .LP
 
 .I QUEUES OPTIONS

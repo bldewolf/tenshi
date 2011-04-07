@@ -491,6 +491,22 @@ sub config_read {
             }
 
         }
+        elsif (/^set\s+threshold\s+(\S+)\s+(\d+)\s+(.+$)/) {
+            my ($queue, $count, $re) = ($1, $2, $3);
+		
+            die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
+		        unless(defined $main{$queue});
+            
+            die RED "[ERROR] Invalid count in threshold set directive: $_\n"
+		        if($2 <= 0);
+
+            $main{$queue}{'threshold'} = []
+                unless(defined $main{$queue}{'threshold'});
+
+            # Store $re, $count pair in the array
+            push @{$main{$queue}{'threshold'}}, qr/$re/, $count;
+
+        }
         elsif (/^set\s+/) {
 
             die RED "[ERROR] Invalid set directive: $_\n";
@@ -746,6 +762,25 @@ sub queues_flush {
 sub queue_mail {
     my $queue = shift;
     my @lines;
+
+    # Evaluate threshold first to prevent report if none of the lines appeared
+    # often enough
+    if($main{$queue}{'threshold'}) {
+        my @t = @{$main{$queue}{'threshold'}};
+        foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
+            foreach my $key (keys %{$main{$queue}{'logs'}{$hostname}}) {
+                for(my $x = 0; $x < @t; $x += 2) {
+                    # Compare count first then regex
+                    if($main{$queue}{'logs'}{$hostname}{$key} < $t[$x+1] && $key =~ $t[$x]) {
+                        delete $main{$queue}{'logs'}{$hostname}{$key};
+                        last;
+                    }
+                }
+            }
+            delete $main{$queue}{'logs'}{$hostname} unless(keys %{$main{$queue}{'logs'}{$hostname}});
+        }
+        delete $main{$queue}{'logs'} unless(keys %{$main{$queue}{'logs'}});
+    }
 
     return unless (keys %{$main{$queue}{'logs'}});
     $debug && debug(11,$queue);
