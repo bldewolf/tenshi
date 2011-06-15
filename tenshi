@@ -977,7 +977,7 @@ sub clean_up {
     $saved_pid and unlink $pid_file;
 
     if (scalar(@tail_pids) > 0) {
-      debug(21, join(' ', @tail_pids));
+      $debug && debug(21, join(' ', @tail_pids));
       kill("SIGTERM", @tail_pids);
     }
 
