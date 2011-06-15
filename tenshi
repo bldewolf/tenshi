@@ -1165,7 +1165,7 @@ sub debug {
     $debug_msg{'100'}{'msg'} = "[ERROR] Tried to change a protected setting: $_[1]. Please restart tenshi for this change to take effect\n";
     $debug_msg{'100'}{'col'} = RED;
 
-    print $debug_msg{$_[0]}{'col'}, $debug_msg{$_[0]}{'msg'};
+    print $debug_msg{$_[0]}{'col'}, $debug_msg{$_[0]}{'msg'}, RESET;
 }
 
 sub usage {
