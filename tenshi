@@ -224,8 +224,8 @@ if (scalar(@fhs) < 1) {
 }
 
 if (!($debug or $profile or $foreground)) {
-    open(STDOUT, "/dev/null") or clean_up and die RED "[ERROR] can't open /dev/null as STDOUT: $!\n";
-    open(STDERR, "/dev/null") or clean_up and die RED "[ERROR] can't open /dev/null as STDERR: $!\n";
+    close STDOUT or clean_up and die RED "[ERROR] can't close STDOUT: $!\n";
+    close STDERR or clean_up and die RED "[ERROR] can't close STDERR: $!\n";
 }
 
 $debug && debug(3);
@@ -955,7 +955,7 @@ sub prepare_process {
     $) = "$gid $gid"            or clean_up and die RED "[ERROR] can't reset supplementary groups: $!\n";
     setgid($gid)                or clean_up and die RED "[ERROR] can't setgid to $gid: $!\n";
     setuid($uid)                or clean_up and die RED "[ERROR] can't setuid to $uid: $!\n";
-    open(STDIN, "/dev/null")    or clean_up and die RED "[ERROR] can't open STDIN as /dev/null: $!\n";
+    close STDIN                 or clean_up and die RED "[ERROR] can't close STDIN: $!\n";
 }
 
 sub daemonize {
