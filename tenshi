@@ -238,6 +238,7 @@ my $bs = IO::BufferedSelect->new(@fhs);
 if(!($debug || $profile || $foreground)) {
     daemonize();
 }
+save_pid();
 
 while (!$time_to_die) {
     my $now = time;
@@ -951,7 +952,6 @@ sub prepare_process {
     $) = "$gid $gid"            or die RED "[ERROR] can't reset supplementary groups: $!\n";
     setgid($gid)                or die RED "[ERROR] can't setgid to $gid: $!\n";
     setuid($uid)                or die RED "[ERROR] can't setuid to $uid: $!\n";
-    save_pid();
     close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
 }
 
