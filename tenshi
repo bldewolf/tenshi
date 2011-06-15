@@ -988,6 +988,7 @@ sub clean_up {
         }
     }
     $! = $save;
+    return 1;
 }
 
 sub get_timezone {
