@@ -972,6 +972,7 @@ sub save_pid {
 }
 
 sub clean_up {
+    my $save = $!; # Preserve $! for the call to die
     local $SIG{CHLD} = 'IGNORE';
     $saved_pid and unlink $pid_file;
 
@@ -986,6 +987,7 @@ sub clean_up {
             $syslog_listen_socket->close();
         }
     }
+    $! = $save;
 }
 
 sub get_timezone {
