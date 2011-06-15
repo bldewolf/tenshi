@@ -957,6 +957,7 @@ sub prepare_process {
     setgid($gid)                or clean_up and die RED "[ERROR] can't setgid to $gid: $!\n";
     setuid($uid)                or clean_up and die RED "[ERROR] can't setuid to $uid: $!\n";
     close STDIN                 or clean_up and die RED "[ERROR] can't close STDIN: $!\n";
+    open(STDIN, "/dev/null")    or clean_up and die RED "[ERROR] can't open STDIN as /dev/null: $!\n";
 }
 
 sub daemonize {
