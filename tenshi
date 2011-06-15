@@ -52,6 +52,7 @@ my $last_minute    = 0;
 my $sleep          = 5;
 my $mailtimeout    = 10;
 my $select_timeout = 1;
+my $saved_pid      = 0;
 
 my $config_reinit  = 1;
 
@@ -100,19 +101,22 @@ my $mask_length = length $mask;
 my $subject     = 'tenshi report';
 my $sort_order  = 'descending';
 
+# Prototype for clean_up so we don't need parens
+sub clean_up;
+
 config_read($config_file);
 $config_read = 1;
 
 if ($opts{'C'}) { exit 0; }
 
-if (not defined($uid)) { $uid = getpwnam('tenshi') or die RED "[ERROR] no such user: tenshi\n"; }
-if (not defined($gid)) { $gid = getgrnam('tenshi') or die RED "[ERROR] no such group: tenshi\n"; }
+if (not defined($uid)) { $uid = getpwnam('tenshi') or clean_up and die RED "[ERROR] no such user: tenshi\n"; }
+if (not defined($gid)) { $gid = getgrnam('tenshi') or clean_up and die RED "[ERROR] no such group: tenshi\n"; }
 
 if ($listen) {
     $syslog_listen_socket = IO::Socket::INET->new(
         LocalAddr => $listen,
         Proto =>     'udp'
-    ) or die "[ERROR] can't bind UDP socket: $!\n";
+    ) or clean_up and die "[ERROR] can't bind UDP socket: $!\n";
     push @fhs, $syslog_listen_socket;
 }
 
@@ -127,12 +131,12 @@ prepare_process();
 if (!$profile) {
     foreach my $queue (@queues) {
         if ($filter_file{$queue} and ! -x $filter_file{$queue}) {
-            die RED "[ERROR] $filter_file{$queue}: not executable";
+            clean_up and die RED "[ERROR] $filter_file{$queue}: not executable";
         }
     }
 
     if ($main{'csv'} and ! -x $main{'csv'}{'path'}) {
-        die RED "[ERROR] $main{'csv'}{'path'}: not executable";
+        clean_up and die RED "[ERROR] $main{'csv'}{'path'}: not executable";
     }
 
     my @readable_log_files;
@@ -151,7 +155,7 @@ if (!$profile) {
     }
 
     @readable_log_files > 0 || @fifo_files > 0
-        or die RED "[ERROR] no readable log files";
+        or clean_up and die RED "[ERROR] no readable log files";
 
     @log_files = @readable_log_files;
 }
@@ -162,7 +166,7 @@ if (!$profile) {
 
 if ($profile) {
     open(my $fh, "-") or
-        die RED "[ERROR] could not open standard input: $!\n";
+        clean_up and die RED "[ERROR] could not open standard input: $!\n";
     push @fhs, $fh;
 } else {
     if (scalar(@log_files) > 0) {
@@ -172,15 +176,15 @@ if ($profile) {
 
                 $debug && debug(20, "$tail_file $tail_args $log");
 
-                die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
+                clean_up and die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
                 my $tail_pid = open(my $fh, "-|");
 
                 if (not defined($tail_pid)) {
-                    die RED "[ERROR] could not open pipe for tail command: $!\n";
+                    clean_up and die RED "[ERROR] could not open pipe for tail command: $!\n";
                 } elsif ($tail_pid == 0) {
                     close STDERR;
                     exec("$tail_file $tail_args $log") or
-                        die;
+                        die; # This is the child process so don't clean_up
                 }
                 push @fhs, $fh;
                 push @tail_pids, $tail_pid;
@@ -190,15 +194,15 @@ if ($profile) {
             my $log_files = join(' ', @log_files);
             $debug && debug(20, "$tail_file $tail_args $log_files");
 
-            die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
+            clean_up and die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
             my $tail_pid = open(my $fh, "-|");
 
             if (not defined($tail_pid)) {
-                die RED "[ERROR] could not open pipe for tail command: $!\n";
+                clean_up and die RED "[ERROR] could not open pipe for tail command: $!\n";
             } elsif ($tail_pid == 0) {
                 close STDERR;
                 exec("$tail_file $tail_args $log_files") or
-                        die;
+                        die; # This is the child process so don't clean_up
             }
             push @fhs, $fh;
             push @tail_pids, $tail_pid;
@@ -209,19 +213,19 @@ if ($profile) {
         foreach my $fifo_file (@fifo_files) {
             $debug && debug(19, "$fifo_file");
             open(my $fh, "+<$fifo_file") or
-                die RED "[ERROR] could not open $fifo_file: $!\n";
+                clean_up and die RED "[ERROR] could not open $fifo_file: $!\n";
             push @fhs, $fh;
         }
     }
 }
 
 if (scalar(@fhs) < 1) {
-    die RED "[ERROR] No log file has been specified\n";
+    clean_up and die RED "[ERROR] No log file has been specified\n";
 }
 
 if (!($debug or $profile or $foreground)) {
-    close STDOUT or die RED "[ERROR] can't close STDOUT: $!\n";
-    close STDERR or die RED "[ERROR] can't close STDERR: $!\n";
+    close STDOUT or clean_up and die RED "[ERROR] can't close STDOUT: $!\n";
+    close STDERR or clean_up and die RED "[ERROR] can't close STDERR: $!\n";
 }
 
 $debug && debug(3);
@@ -319,7 +323,7 @@ sub config_read {
     # configuration file parsing
     #
 
-    open(my $CONF,$config_file) or die RED "[ERROR] could not open configuration file $config_file: $!\n";
+    open(my $CONF,$config_file) or clean_up and die RED "[ERROR] could not open configuration file $config_file: $!\n";
 
     while (<$CONF>) {
         s/^\s+//;
@@ -330,7 +334,7 @@ sub config_read {
 
         if (/^includedir\s+(\S+)/) {
             $debug && debug(1,$_);
-            opendir(my $DIR, $1) or die RED "[ERROR] could not open directory $1: $!\n";
+            opendir(my $DIR, $1) or clean_up and die RED "[ERROR] could not open directory $1: $!\n";
             foreach my $file (sort readdir($DIR)) {
                 next if ($file =~ /^\./);
                 next unless -f "$1/$file";
@@ -341,7 +345,7 @@ sub config_read {
 
         if (/^set\s+logfile\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @log_files))) {
-                die debug(100,'logfile');
+                clean_up and die debug(100,'logfile');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -349,7 +353,7 @@ sub config_read {
         }
         elsif (/^set\s+fifo\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @fifo_files))) {
-                die debug(100,'fifo');
+                clean_up and die debug(100,'fifo');
             } elsif (!$config_read) {
                 $debug && debug(1, $_);
             }
@@ -358,7 +362,7 @@ sub config_read {
         elsif (/^set\s+pidfile\s+(\S+)/) {
             next if $opts{'P'};
             if ($config_read and ($1 ne $pid_file)) {
-                die debug(100,'pidfile');
+                clean_up and die debug(100,'pidfile');
             } elsif (!$config_read and (!$opts{'P'})) {
                 $debug && debug(1,$_);
             }
@@ -366,7 +370,7 @@ sub config_read {
         }
         elsif (/^set\s+tail\s+(\S+)\s*(\S+.*)?/) {
             if ($config_read and ($1 ne $tail_file)) {
-                die debug(100,'tail');
+                clean_up and die debug(100,'tail');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -375,7 +379,7 @@ sub config_read {
         }
         elsif (/^set\s+tail_multiple\s+(off|on)/) {
             if ($config_read and ($1 ne $tail_multiple)) {
-                die debug(100,'tail_multiple');
+                clean_up and die debug(100,'tail_multiple');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -384,26 +388,26 @@ sub config_read {
         }
         elsif (/^set\s+uid\s+(.+)/) {
             if ($config_read and (getpwnam($1) ne $uid)) {
-                die debug(100,'uid');
+                clean_up and die debug(100,'uid');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
             $uid = getpwnam($1);
-            die RED "[ERROR] no such user: $1\n" if not defined $uid;
-            if (not defined $uid) { die RED "[ERROR] no such user: $1\n"; }
+            clean_up and die RED "[ERROR] no such user: $1\n" if not defined $uid;
+            if (not defined $uid) { clean_up and die RED "[ERROR] no such user: $1\n"; }
         }
         elsif (/^set\s+gid\s+(.+)/) {
             if ($config_read and (getgrnam($1) ne $gid)) {
-                die debug(100,'gid');
+                clean_up and die debug(100,'gid');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
             $gid = getgrnam($1);
-            if (not defined $gid) { die RED "[ERROR] no such group: $1\n"; }
+            if (not defined $gid) { clean_up and die RED "[ERROR] no such group: $1\n"; }
         }
         elsif (/^set\s+listen\s+(\d+\.\d+\.\d+\.\d+:\d+)/) {
             if ($config_read and ($1 ne $listen)) {
-                die debug(100,'listen');
+                clean_up and die debug(100,'listen');
             } elsif (!$config_read) {
                 $debug && debug(1,$_);
             }
@@ -414,7 +418,7 @@ sub config_read {
                 $sort_order = $1;
                 $debug && debug(1,$_); next; }
             else {
-                die RED "[ERROR] sort_order is invalid";
+                clean_up and die RED "[ERROR] sort_order is invalid";
             }
         }
         elsif (/^set\s+limit\s+(\d+)/)             { $limit           = $1; $debug && debug(1,$_); next; }
@@ -428,7 +432,7 @@ sub config_read {
             $debug && debug(1,$_); next;
         }
         elsif (/^set\s+sleep\s+(\d+)/)      {
-            if ($sleep > 60) { die RED "[ERROR] sleep time should be <= 60 seconds\n"; } else {
+            if ($sleep > 60) { clean_up and die RED "[ERROR] sleep time should be <= 60 seconds\n"; } else {
                 $sleep = $1; $debug && debug(1,$_); next;
             }
         }
@@ -457,11 +461,11 @@ sub config_read {
             my ($queue, $mail_from, $pager, $mail_to, $cron_spec, $subject) = ($1, $2, $3, $4, $5, $6);
 
             if (queue_is_builtin($queue)) {
-                die RED "[ERROR] '$queue' is a builtin queue\n";
+                clean_up and die RED "[ERROR] '$queue' is a builtin queue\n";
             }
 
             if ($queue eq 'csv') {
-                die RED "[ERROR] '$queue' is a special queue and must be defined with 'set csv' option\n";
+                clean_up and die RED "[ERROR] '$queue' is a special queue and must be defined with 'set csv' option\n";
             }
 
             if ($cron_spec eq 'now') {
@@ -496,10 +500,10 @@ sub config_read {
         elsif (/^set\s+threshold\s+(\S+)\s+(\d+)\s+(.+$)/) {
             my ($queue, $count, $re) = ($1, $2, $3);
 		
-            die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
+            clean_up and die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
 		        unless(defined $main{$queue});
             
-            die RED "[ERROR] Invalid count in threshold set directive: $_\n"
+            clean_up and die RED "[ERROR] Invalid count in threshold set directive: $_\n"
 		        if($2 <= 0);
 
             $main{$queue}{'threshold'} = []
@@ -511,7 +515,7 @@ sub config_read {
         }
         elsif (/^set\s+/) {
 
-            die RED "[ERROR] Invalid set directive: $_\n";
+            clean_up and die RED "[ERROR] Invalid set directive: $_\n";
 
         }
         elsif (my ($queue, $reg) = $_ =~ /(^\S+)\s+(.+$)/) {
@@ -526,36 +530,36 @@ sub config_read {
                 my ($queue, $escalation) = split(/:/, $q);
 
                 if (!($main{$queue})) {
-                    die RED "[ERROR] Invalid configuration directive: queue $queue not defined\n";
+                    clean_up and die RED "[ERROR] Invalid configuration directive: queue $queue not defined\n";
                 }
                 if ((scalar(@queue) > 1) and queue_is_builtin($queue)) {
-                    die RED "[ERROR] builtin queue not allowed in multiple queues declaration\n";
+                    clean_up and die RED "[ERROR] builtin queue not allowed in multiple queues declaration\n";
                 }
                 if (($queue =~ /:/) && queue_is_builtin($queue)) {
-                    die RED "[ERROR] builtin queues are not allowed to have an escalation number\n";
+                    clean_up and die RED "[ERROR] builtin queues are not allowed to have an escalation number\n";
                 }
 
                 if (defined($escalation)) {
                     if ($escalation !~ m/^[1-9]\d*$/) {
-                        die RED "[ERROR] Escalation number must be a positive integer greater than zero\n";
+                        clean_up and die RED "[ERROR] Escalation number must be a positive integer greater than zero\n";
                     }
 
                     if ($escalation >= $max_escalation) {
                         $max_escalation = $escalation;
                     } else {
-                        die RED "[ERROR] Escalation numbers must increase from left to right in the queue list\n";
+                        clean_up and die RED "[ERROR] Escalation numbers must increase from left to right in the queue list\n";
                     }
 
                     $queue_escalation{$queue} = $escalation;
                 } else {
                     if ($max_escalation) {
-                        die RED "[ERROR] All queues without escalation numbers must be listed more left than the queues with escalation numbers\n";
+                        clean_up and die RED "[ERROR] All queues without escalation numbers must be listed more left than the queues with escalation numbers\n";
                     }
                 }
             }
 
             if (@queue > 1 and $queue[0] =~ /:/) {
-                die RED "[ERROR] Left most queue in a multiple queue declaration can not have an escalation number\n";
+                clean_up and die RED "[ERROR] Left most queue in a multiple queue declaration can not have an escalation number\n";
             }
 
             if ($queue eq 'group')      { push @group_stack, scalar(@regexp); }
@@ -570,7 +574,7 @@ sub config_read {
         elsif (/^group_end/) {
 
             if (scalar(@group_stack) < 1) {
-                die RED "[ERROR] Tried to close a group when there are non open\n";
+                clean_up and die RED "[ERROR] Tried to close a group when there are non open\n";
             }
 
             $skip[pop @group_stack] = scalar(@regexp) || 0;
@@ -578,13 +582,13 @@ sub config_read {
         }
         else {
 
-            die RED "[ERROR] Invalid configuration directive: $_\n";
+            clean_up and die RED "[ERROR] Invalid configuration directive: $_\n";
         }
     }
 
     close $CONF;
 
-    die RED "[ERROR] no smtp server specified" if (!$mailserver);
+    clean_up and die RED "[ERROR] no smtp server specified" if (!$mailserver);
 
     $debug && debug(2,$config_file);
 
@@ -788,7 +792,7 @@ sub queue_mail {
     $debug && debug(11,$queue);
 
     my $tmp = new File::Temp(UNLINK => 1, DIR => '/tmp/', SUFFIX => '.tenshi')
-        or die RED "[ERROR] could not open temporary file: $!\n";
+        or clean_up and die RED "[ERROR] could not open temporary file: $!\n";
     $debug && debug(19,$tmp);
 
     if ($status and (!$main{$queue}{'pager'})) {
@@ -841,7 +845,7 @@ sub queue_mail {
         }
     }
 
-    seek($tmp, 0, 0) or die RED "[ERROR] can't rewind $tmp->filename: $!\n";
+    seek($tmp, 0, 0) or clean_up and die RED "[ERROR] can't rewind $tmp->filename: $!\n";
 
     if ($filter_file{$queue}) {
         local $SIG{CHLD} = 'IGNORE'; # FIXME it's ugly I know, need something smarter here
@@ -849,7 +853,7 @@ sub queue_mail {
         $debug && debug(20,"$filter_file{$queue} $filter_args{$queue} < $tmp");
 
         open(my $filter, "$filter_file{$queue} $filter_args{$queue} < $tmp|") or
-            die RED "[ERROR] '$filter_file{$queue} $filter_args{$queue} < $tmp' failed: $!\n";
+            clean_up and die RED "[ERROR] '$filter_file{$queue} $filter_args{$queue} < $tmp' failed: $!\n";
 
         while (<$filter>) { push @lines, $_; }
     } else {
@@ -911,7 +915,7 @@ sub csv_out {
     }
 
     my $tmp = new File::Temp(UNLINK => 1, DIR => '/tmp/', SUFFIX => '.tenshi')
-        or die RED "[ERROR] could not open temporary file: $!\n";
+        or clean_up and die RED "[ERROR] could not open temporary file: $!\n";
     $debug && debug(19,$tmp);
 
     foreach my $hostname (keys %{$main{'csv'}{'logs'}}) {
@@ -933,7 +937,7 @@ sub csv_out {
         }
     }
 
-    seek($tmp, 0, 0) or die RED "[ERROR] can't rewind $tmp->filename: $!\n";
+    seek($tmp, 0, 0) or clean_up and die RED "[ERROR] can't rewind $tmp->filename: $!\n";
 
     local $SIG{CHLD} = 'IGNORE'; # FIXME it's ugly I know, need something smarter here
 
@@ -947,28 +951,29 @@ sub csv_out {
 
 sub prepare_process {
     $0 = 'tenshi';
-    chdir '/'                   or die RED "[ERROR] can't chdir to /: $!\n";
-    setsid()                    or die RED "[ERROR] can't start a new session: $!\n";
-    $) = "$gid $gid"            or die RED "[ERROR] can't reset supplementary groups: $!\n";
-    setgid($gid)                or die RED "[ERROR] can't setgid to $gid: $!\n";
-    setuid($uid)                or die RED "[ERROR] can't setuid to $uid: $!\n";
-    close STDIN                 or die RED "[ERROR] can't close STDIN: $!\n";
+    chdir '/'                   or clean_up and die RED "[ERROR] can't chdir to /: $!\n";
+    setsid()                    or clean_up and die RED "[ERROR] can't start a new session: $!\n";
+    $) = "$gid $gid"            or clean_up and die RED "[ERROR] can't reset supplementary groups: $!\n";
+    setgid($gid)                or clean_up and die RED "[ERROR] can't setgid to $gid: $!\n";
+    setuid($uid)                or clean_up and die RED "[ERROR] can't setuid to $uid: $!\n";
+    close STDIN                 or clean_up and die RED "[ERROR] can't close STDIN: $!\n";
 }
 
 sub daemonize {
-    defined(my $pid = fork)     or die RED "[ERROR] can't fork: $!\n";
+    defined(my $pid = fork)     or clean_up and die RED "[ERROR] can't fork: $!\n";
     exit if $pid;
 }
 
 sub save_pid {
-    open (PIDFILE,">$pid_file") or die RED "[ERROR] could not open pid file $pid_file: $!\n";
+    open (PIDFILE,">$pid_file") or clean_up and die RED "[ERROR] could not open pid file $pid_file: $!\n";
     print PIDFILE $$; $debug && debug(4,$$);
     close PIDFILE;
+    $saved_pid = 1;
 }
 
 sub clean_up {
     local $SIG{CHLD} = 'IGNORE';
-    unlink $pid_file;
+    $saved_pid and unlink $pid_file;
 
     if (scalar(@tail_pids) > 0) {
       debug(21, join(' ', @tail_pids));
@@ -1010,7 +1015,7 @@ sub cron_spec_to_mask {
 
     for (my $i = 0; $i < scalar(@cron_specs); $i++) {
         $string =~ s/^(\S+)\s*//o
-            or die RED "[ERROR] Unable to parse cron string: $string\n";
+            or clean_up and die RED "[ERROR] Unable to parse cron string: $string\n";
 
         my $cron_spec = $cron_specs[$i];
 
@@ -1030,7 +1035,7 @@ sub cron_spec_to_mask {
             else {
 
                 if (!($field =~ /(\w+)(?:-(\w+)(?:\/([0-9]+))?)?/o)) {
-                    die RED "[ERROR] Error in field syntax: $field\n";
+                    clean_up and die RED "[ERROR] Error in field syntax: $field\n";
                 }
 
                 if ($#- == 1) {
@@ -1048,16 +1053,16 @@ sub cron_spec_to_mask {
                 }
 
                 if ($start > $end) {
-                    die RED "[ERROR] Error in field syntax. Ranges should be <lower>-<higher>: $field\n"
+                    clean_up and die RED "[ERROR] Error in field syntax. Ranges should be <lower>-<higher>: $field\n"
                 }
             }
 
             if ($start < $cron_spec->{'min'}) {
-                die RED "[ERROR] $start is below minimum value for field in: $field\n";
+                clean_up and die RED "[ERROR] $start is below minimum value for field in: $field\n";
             }
 
             if ($end > $cron_spec->{'max'}) {
-                die RED "[ERROR] $end is above maximum value for field in: $field\n";
+                clean_up and die RED "[ERROR] $end is above maximum value for field in: $field\n";
             }
 
             if ($cron_spec->{'shift'}) {
