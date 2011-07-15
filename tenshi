@@ -1,9 +1,9 @@
 #!/usr/bin/perl
 #
-# tenshi 0.12 2010/09/17
+# tenshi 0.13 2011/07/13
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2010 Andrea Barisani <andrea@inversepath.com>
+# Copyright 2004-2011 Andrea Barisani <andrea@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -33,7 +33,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.12';
+my $version = '0.13';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -101,7 +101,7 @@ my $mask_length = length $mask;
 my $subject     = 'tenshi report';
 my $sort_order  = 'descending';
 
-# Prototype for clean_up so we don't need parens
+# prototype for clean_up so we don't need parens
 sub clean_up;
 
 config_read($config_file);
@@ -184,7 +184,7 @@ if ($profile) {
                 } elsif ($tail_pid == 0) {
                     close STDERR;
                     exec("$tail_file $tail_args $log") or
-                        die; # This is the child process so don't clean_up
+                        die; # this is the child process so don't clean_up
                 }
                 push @fhs, $fh;
                 push @tail_pids, $tail_pid;
@@ -202,7 +202,7 @@ if ($profile) {
             } elsif ($tail_pid == 0) {
                 close STDERR;
                 exec("$tail_file $tail_args $log_files") or
-                        die; # This is the child process so don't clean_up
+                        die; # this is the child process so don't clean_up
             }
             push @fhs, $fh;
             push @tail_pids, $tail_pid;
@@ -238,10 +238,10 @@ $SIG{'USR2'} = sub { $debug && debug(5,'USR2') ; $status = 'flushing'   ; $queue
 
 my $bs = IO::BufferedSelect->new(@fhs);
 
-
-if(!($debug || $profile || $foreground)) {
+if (!($debug || $profile || $foreground)) {
     daemonize();
 }
+
 save_pid();
 
 while (!$time_to_die) {
@@ -499,24 +499,25 @@ sub config_read {
         }
         elsif (/^set\s+threshold\s+(\S+)\s+(\d+)\s+(.+$)/) {
             my ($queue, $count, $re) = ($1, $2, $3);
-		
-            clean_up and die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
-		        unless(defined $main{$queue});
-            
-            clean_up and die RED "[ERROR] Invalid count in threshold set directive: $_\n"
-		        if($2 <= 0);
 
-            $main{$queue}{'threshold'} = []
-                unless(defined $main{$queue}{'threshold'});
+            unless (defined $main{$queue}) {
+                clean_up and die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
+            }
 
-            # Store $re, $count pair in the array
+            if ($count <= 0) {
+                clean_up and die RED "[ERROR] Invalid count in threshold set directive: $_\n"
+            }
+
+            unless(defined $main{$queue}{'threshold'}) {
+                $main{$queue}{'threshold'} = []
+            }
+
+            # store $re, $count pair in the array
             push @{$main{$queue}{'threshold'}}, qr/$re/, $count;
 
         }
         elsif (/^set\s+/) {
-
             clean_up and die RED "[ERROR] Invalid set directive: $_\n";
-
         }
         elsif (my ($queue, $reg) = $_ =~ /(^\S+)\s+(.+$)/) {
 
@@ -532,9 +533,11 @@ sub config_read {
                 if (!($main{$queue})) {
                     clean_up and die RED "[ERROR] Invalid configuration directive: queue $queue not defined\n";
                 }
+
                 if ((scalar(@queue) > 1) and queue_is_builtin($queue)) {
                     clean_up and die RED "[ERROR] builtin queue not allowed in multiple queues declaration\n";
                 }
+
                 if (($queue =~ /:/) && queue_is_builtin($queue)) {
                     clean_up and die RED "[ERROR] builtin queues are not allowed to have an escalation number\n";
                 }
@@ -579,9 +582,7 @@ sub config_read {
 
             $skip[pop @group_stack] = scalar(@regexp) || 0;
 
-        }
-        else {
-
+        } else {
             clean_up and die RED "[ERROR] Invalid configuration directive: $_\n";
         }
     }
@@ -769,15 +770,15 @@ sub queue_mail {
     my $queue = shift;
     my @lines;
 
-    # Evaluate threshold first to prevent report if none of the lines appeared
-    # often enough
+    # evaluate threshold first to prevent report if none of the lines appeared often enough
     if($main{$queue}{'threshold'}) {
         my @t = @{$main{$queue}{'threshold'}};
+
         foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
             foreach my $key (keys %{$main{$queue}{'logs'}{$hostname}}) {
-                for(my $x = 0; $x < @t; $x += 2) {
-                    # Compare count first then regex
-                    if($main{$queue}{'logs'}{$hostname}{$key} < $t[$x+1] && $key =~ $t[$x]) {
+                for (my $x = 0; $x < @t; $x += 2) {
+                    # compare count first then regex
+                    if ($main{$queue}{'logs'}{$hostname}{$key} < $t[$x+1] && $key =~ $t[$x]) {
                         delete $main{$queue}{'logs'}{$hostname}{$key};
                         last;
                     }
@@ -838,7 +839,7 @@ sub queue_mail {
         print $tmp "\n  *** Too many alerts (limit: $limit)  ***\n"
             if ($limit and ($index >= $limit));
 
-        # Clear regexp match count for every regexp whose left most queue is the one being mailed.
+        # clear regexp match count for every regexp whose left most queue is the one being mailed
         for (my $index = 0; $index <= $#regexp; $index++) {
             my @q = split(/,/, $queues[$index]);
             $regexp_matches{$hostname}[$index] = 0 if $q[0] eq $queue;
@@ -930,7 +931,7 @@ sub csv_out {
             $index++;
         }
 
-        # Clear regexp match count for every regexp whose left most queue is the one being mailed.
+        # clear regexp match count for every regexp whose left most queue is the one being mailed
         for (my $index = 0; $index <= $#regexp; $index++) {
             my @q = split(/,/, $queues[$index]);
             $regexp_matches{$hostname}[$index] = 0 if $q[0] eq 'csv';
@@ -972,9 +973,9 @@ sub save_pid {
 }
 
 sub clean_up {
-    my $save = $!; # Preserve $! for the call to die
+    my $save = $!; # preserve $! for the call to die
     local $SIG{CHLD} = 'IGNORE';
-    $saved_pid and unlink $pid_file;
+    unlink $pid_file if $saved_pid;
 
     if (scalar(@tail_pids) > 0) {
       $debug && debug(21, join(' ', @tail_pids));
@@ -1182,7 +1183,7 @@ sub debug {
 
 sub usage {
    die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2010                Andrea Barisani || <andrea\@inversepath.com>\n
+Copyright 2004-2011                Andrea Barisani || <andrea\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax
