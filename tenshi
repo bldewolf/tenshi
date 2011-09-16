@@ -214,9 +214,9 @@ if (scalar(@fhs) < 1) {
 }
 
 if (!($debug or $profile or $foreground)) {
-    close STDOUT              or clean_up and die RED "[ERROR] can't close STDOUT: $!\n";
+    close STDOUT               or clean_up and die RED "[ERROR] can't close STDOUT: $!\n";
     open(STDOUT, ">/dev/null") or clean_up and die RED "[ERROR] can't open STDOUT as /dev/null: $!\n";
-    close STDERR              or clean_up and die RED "[ERROR] can't close STDERR: $!\n";
+    close STDERR               or clean_up and die RED "[ERROR] can't close STDERR: $!\n";
     open(STDERR, ">/dev/null") or clean_up and die RED "[ERROR] can't open STDERR as /dev/null: $!\n";
 }
 
