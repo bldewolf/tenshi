@@ -170,43 +170,33 @@ if ($profile) {
     push @fhs, $fh;
 } else {
     if (scalar(@log_files) > 0) {
+        clean_up and die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
+        my @remaining = @log_files;
 
-        if ($tail_multiple eq 'on') {
-            foreach my $log (@log_files) {
-
-                $debug && debug(20, "$tail_file $tail_args $log");
-
-                clean_up and die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
-                my $tail_pid = open(my $fh, "-|");
-
-                if (not defined($tail_pid)) {
-                    clean_up and die RED "[ERROR] could not open pipe for tail command: $!\n";
-                } elsif ($tail_pid == 0) {
-                    close STDERR;
-                    exec("$tail_file $tail_args $log") or
-                        die; # this is the child process so don't clean_up
-                }
-                push @fhs, $fh;
-                push @tail_pids, $tail_pid;
+        do {
+            my $log;
+            if($tail_multiple eq 'on') {
+                $log = shift @remaining;
+            } else {
+                $log = join(' ', @remaining);
+                @remaining = ();
             }
-        } else {
-
-            my $log_files = join(' ', @log_files);
-            $debug && debug(20, "$tail_file $tail_args $log_files");
-
-            clean_up and die RED "[ERROR] $tail_file: $!\n" if (! -f $tail_file);
-            my $tail_pid = open(my $fh, "-|");
-
-            if (not defined($tail_pid)) {
-                clean_up and die RED "[ERROR] could not open pipe for tail command: $!\n";
-            } elsif ($tail_pid == 0) {
-                close STDERR;
-                exec("$tail_file $tail_args $log_files") or
-                        die; # this is the child process so don't clean_up
+            $debug && debug(20, "$tail_file $tail_args $log");
+            pipe(my $r, my $w) or clean_up and die RED "[ERROR] Could not open pipe for tail: $!\n";
+            my $pid = fork();
+            defined($pid) or clean_up and die RED "[ERROR] Failed first fork for tail: $!\n";
+            if ($pid) {
+                close $w;
+                push @fhs, $r;
+                push @tail_pids, $pid;
+            } else {
+                # this is child, no clean_up
+                open(STDOUT, ">&", $w) or die "Can't re-open pipe as STDOUT: $!";
+                close $r;
+                exec("$tail_file $tail_args $log") or
+                    die "Failed to exec tail command: $!";
             }
-            push @fhs, $fh;
-            push @tail_pids, $tail_pid;
-        }
+        } while(@remaining);
     }
 
     if (scalar(@fifo_files) > 0) {
