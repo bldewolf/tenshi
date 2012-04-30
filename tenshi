@@ -638,12 +638,21 @@ sub parse_line {
 
             if ($line =~ /$regexp/) {
                 $debug && debug(7,$queue,$line);
-                last if ($queue eq 'trash');
+                if ($queue eq 'trash') {
+                    $last_queue{$hostname} = $queue;
+                    $last_match{$hostname} = $line;
+                    last;
+                }
                 next if ($queue eq 'group');
 
                 if ($queue eq 'repeat' and $last_match{$hostname}) {
+                    if(!defined $1) {
+                        print STDERR RED "[WARNING] repeat queue matched without capturing number of lines repeated; skipping\n";
+                        last;
+                    }
                     my @last_queue = split(/,/, $last_queue{$hostname});
                     foreach my $last_queue (@last_queue) {
+                        next if $last_queue eq 'trash';
                         $main{$last_queue}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
                     }
                     last;
