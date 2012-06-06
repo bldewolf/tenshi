@@ -1,9 +1,9 @@
 #!/usr/bin/perl
 #
-# tenshi 0.13 2011/07/13
+# tenshi 0.14 2012/06/03
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2011 Andrea Barisani <andrea@inversepath.com>
+# Copyright 2004-2012 Andrea Barisani <andrea@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -33,7 +33,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.13';
+my $version = '0.14';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -120,7 +120,7 @@ if ($listen) {
     push @fhs, $syslog_listen_socket;
 }
 
-$SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print RED "[ERROR] Child died. Bailing out\n"; $time_to_die = 1; };
+$SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print RED "[ERROR] child died, bailing out\n"; $time_to_die = 1; };
 
 prepare_process();
 
@@ -175,28 +175,31 @@ if ($profile) {
 
         do {
             my $log;
-            if($tail_multiple eq 'on') {
+
+            if ($tail_multiple eq 'on') {
                 $log = shift @remaining;
             } else {
                 $log = join(' ', @remaining);
                 @remaining = ();
             }
+
             $debug && debug(20, "$tail_file $tail_args $log");
-            pipe(my $r, my $w) or clean_up and die RED "[ERROR] Could not open pipe for tail: $!\n";
+
+            pipe(my $r, my $w) or clean_up and die RED "[ERROR] could not open pipe for tail: $!\n";
             my $pid = fork();
-            defined($pid) or clean_up and die RED "[ERROR] Failed first fork for tail: $!\n";
+            defined($pid) or clean_up and die RED "[ERROR] failed first fork for tail: $!\n";
+
             if ($pid) {
                 close $w;
                 push @fhs, $r;
                 push @tail_pids, $pid;
             } else {
                 # this is child, no clean_up
-                open(STDOUT, ">&", $w) or die "Can't re-open pipe as STDOUT: $!";
+                open(STDOUT, ">&", $w) or die RED "[ERROR] can't re-open pipe as STDOUT: $!\n";
                 close $r;
-                exec("$tail_file $tail_args $log") or
-                    die "Failed to exec tail command: $!";
+                exec("$tail_file $tail_args $log") or die RED "[ERROR] failed to exec tail command: $!\n";
             }
-        } while(@remaining);
+        } while (@remaining);
     }
 
     if (scalar(@fifo_files) > 0) {
@@ -210,7 +213,7 @@ if ($profile) {
 }
 
 if (scalar(@fhs) < 1) {
-    clean_up and die RED "[ERROR] No log file has been specified\n";
+    clean_up and die RED "[ERROR] no log file has been specified\n";
 }
 
 if (!($debug or $profile or $foreground)) {
@@ -268,7 +271,7 @@ while (!$time_to_die) {
             }
         }
 
-        if ($profile and not defined($line)) { print BLUE, "[PROFILE] Reached end of file\n"; $time_to_die = 1; next; }
+        if ($profile and not defined($line)) { print BLUE, "[PROFILE] reached end of file\n"; $time_to_die = 1; next; }
 
         parse_line($line);
     }
@@ -453,7 +456,7 @@ sub config_read {
             my ($queue, $mail_from, $pager, $mail_to, $cron_spec, $subject) = ($1, $2, $3, $4, $5, $6);
 
             if (queue_is_builtin($queue)) {
-                clean_up and die RED "[ERROR] '$queue' is a builtin queue\n";
+                clean_up and die RED "[ERROR] '$queue' is a built-in queue\n";
             }
 
             if ($queue eq 'csv') {
@@ -493,11 +496,11 @@ sub config_read {
             my ($queue, $count, $re) = ($1, $2, $3);
 
             unless (defined $main{$queue}) {
-                clean_up and die RED "[ERROR] Invalid queue in threshold set directive: $_\n"
+                clean_up and die RED "[ERROR] invalid queue in threshold set directive: $_\n"
             }
 
             if ($count <= 0) {
-                clean_up and die RED "[ERROR] Invalid count in threshold set directive: $_\n"
+                clean_up and die RED "[ERROR] invalid count in threshold set directive: $_\n"
             }
 
             unless(defined $main{$queue}{'threshold'}) {
@@ -509,7 +512,7 @@ sub config_read {
 
         }
         elsif (/^set\s+/) {
-            clean_up and die RED "[ERROR] Invalid set directive: $_\n";
+            clean_up and die RED "[ERROR] invalid set directive: $_\n";
         }
         elsif (my ($queue, $reg) = $_ =~ /(^\S+)\s+(.+$)/) {
 
@@ -523,38 +526,38 @@ sub config_read {
                 my ($queue, $escalation) = split(/:/, $q);
 
                 if (!($main{$queue})) {
-                    clean_up and die RED "[ERROR] Invalid configuration directive: queue $queue not defined\n";
+                    clean_up and die RED "[ERROR] invalid configuration directive: queue $queue not defined\n";
                 }
 
                 if ((scalar(@queue) > 1) and queue_is_builtin($queue)) {
-                    clean_up and die RED "[ERROR] builtin queue not allowed in multiple queues declaration\n";
+                    clean_up and die RED "[ERROR] built-in queue not allowed in multiple queues declaration\n";
                 }
 
                 if (($queue =~ /:/) && queue_is_builtin($queue)) {
-                    clean_up and die RED "[ERROR] builtin queues are not allowed to have an escalation number\n";
+                    clean_up and die RED "[ERROR] built-in queues are not allowed to have an escalation number\n";
                 }
 
                 if (defined($escalation)) {
                     if ($escalation !~ m/^[1-9]\d*$/) {
-                        clean_up and die RED "[ERROR] Escalation number must be a positive integer greater than zero\n";
+                        clean_up and die RED "[ERROR] escalation number must be a positive integer greater than zero\n";
                     }
 
                     if ($escalation >= $max_escalation) {
                         $max_escalation = $escalation;
                     } else {
-                        clean_up and die RED "[ERROR] Escalation numbers must increase from left to right in the queue list\n";
+                        clean_up and die RED "[ERROR] escalation numbers must increase from left to right in the queue list\n";
                     }
 
                     $queue_escalation{$queue} = $escalation;
                 } else {
                     if ($max_escalation) {
-                        clean_up and die RED "[ERROR] All queues without escalation numbers must be listed more left than the queues with escalation numbers\n";
+                        clean_up and die RED "[ERROR] all queues without escalation numbers must be listed more left than the queues with escalation numbers\n";
                     }
                 }
             }
 
             if (@queue > 1 and $queue[0] =~ /:/) {
-                clean_up and die RED "[ERROR] Left most queue in a multiple queue declaration can not have an escalation number\n";
+                clean_up and die RED "[ERROR] left most queue in a multiple queue declaration can not have an escalation number\n";
             }
 
             if ($queue eq 'group')      { push @group_stack, scalar(@regexp); }
@@ -569,13 +572,13 @@ sub config_read {
         elsif (/^group_end/) {
 
             if (scalar(@group_stack) < 1) {
-                clean_up and die RED "[ERROR] Tried to close a group when there are non open\n";
+                clean_up and die RED "[ERROR] tried to close a group when there are non open\n";
             }
 
             $skip[pop @group_stack] = scalar(@regexp) || 0;
 
         } else {
-            clean_up and die RED "[ERROR] Invalid configuration directive: $_\n";
+            clean_up and die RED "[ERROR] invalid configuration directive: $_\n";
         }
     }
 
@@ -638,23 +641,28 @@ sub parse_line {
 
             if ($line =~ /$regexp/) {
                 $debug && debug(7,$queue,$line);
+
                 if ($queue eq 'trash') {
                     $last_queue{$hostname} = $queue;
                     $last_match{$hostname} = $line;
                     last;
                 }
+
                 next if ($queue eq 'group');
 
                 if ($queue eq 'repeat' and $last_match{$hostname}) {
-                    if(!defined $1) {
-                        print STDERR RED "[WARNING] repeat queue matched without capturing number of lines repeated; skipping\n";
+                    unless (defined $1) {
+                        $debug && debug(22);
                         last;
                     }
+
                     my @last_queue = split(/,/, $last_queue{$hostname});
+
                     foreach my $last_queue (@last_queue) {
                         next if $last_queue eq 'trash';
                         $main{$last_queue}{'logs'}{$hostname}{$last_match{$hostname}} += $1;
                     }
+
                     last;
                 }
 
@@ -1021,7 +1029,7 @@ sub cron_spec_to_mask {
 
     for (my $i = 0; $i < scalar(@cron_specs); $i++) {
         $string =~ s/^(\S+)\s*//o
-            or clean_up and die RED "[ERROR] Unable to parse cron string: $string\n";
+            or clean_up and die RED "[ERROR] unable to parse cron string: $string\n";
 
         my $cron_spec = $cron_specs[$i];
 
@@ -1041,7 +1049,7 @@ sub cron_spec_to_mask {
             else {
 
                 if (!($field =~ /(\w+)(?:-(\w+)(?:\/([0-9]+))?)?/o)) {
-                    clean_up and die RED "[ERROR] Error in field syntax: $field\n";
+                    clean_up and die RED "[ERROR] error in field syntax: $field\n";
                 }
 
                 if ($#- == 1) {
@@ -1059,7 +1067,7 @@ sub cron_spec_to_mask {
                 }
 
                 if ($start > $end) {
-                    clean_up and die RED "[ERROR] Error in field syntax. Ranges should be <lower>-<higher>: $field\n"
+                    clean_up and die RED "[ERROR] error in field syntax. Ranges should be <lower>-<higher>: $field\n"
                 }
             }
 
@@ -1165,7 +1173,7 @@ sub debug {
     $debug_msg{'17'}{'msg'} = "[CRON]  test returned positive\n";
     $debug_msg{'17'}{'col'} = GREEN;
 
-    $debug_msg{'18'}{'msg'} = "[REGEX] Set regex: $_[1] to: $_[2]\n";
+    $debug_msg{'18'}{'msg'} = "[REGEX] set regex: $_[1] to: $_[2]\n";
     $debug_msg{'18'}{'col'} = YELLOW;
 
     $debug_msg{'19'}{'msg'} = "[FILE]  opening $_[1]\n";
@@ -1177,7 +1185,10 @@ sub debug {
     $debug_msg{'21'}{'msg'} = "[EXEC]  killing child processes [pids: $_[1]]\n";
     $debug_msg{'21'}{'col'} = CYAN;
 
-    $debug_msg{'100'}{'msg'} = "[ERROR] Tried to change a protected setting: $_[1]. Please restart tenshi for this change to take effect\n";
+    $debug_msg{'22'}{'msg'} = "[REGEX] repeat queue matched without capturing number of lines repeated; skipping\n";
+    $debug_msg{'22'}{'col'} = RED;
+
+    $debug_msg{'100'}{'msg'} = "[ERROR] tried to change a protected setting: $_[1], please restart tenshi for this change to take effect\n";
     $debug_msg{'100'}{'col'} = RED;
 
     print $debug_msg{$_[0]}{'col'}, $debug_msg{$_[0]}{'msg'}, RESET;
@@ -1185,7 +1196,7 @@ sub debug {
 
 sub usage {
    die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2011                Andrea Barisani || <andrea\@inversepath.com>\n
+Copyright 2004-2012                Andrea Barisani || <andrea\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax
