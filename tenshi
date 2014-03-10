@@ -197,6 +197,7 @@ if ($profile) {
                 # this is child, no clean_up
                 open(STDOUT, ">&", $w) or die RED "[ERROR] can't re-open pipe as STDOUT: $!\n";
                 close $r;
+                open(STDERR, ">/dev/null") or die RED "[ERROR] can't open STDERR as /dev/null: $!\n";
                 exec("$tail_file $tail_args $log") or die RED "[ERROR] failed to exec tail command: $!\n";
             }
         } while (@remaining);
