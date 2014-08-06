@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "03 Jun 2012" "version 0.14"
+.TH "tenshi" 8 "04 Aug 2014" "version 0.15"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -202,6 +202,9 @@ The mail server to be contacted for sending out reports.
 .TP
 .I set mailtimeout 10
 The timeout in seconds for mail server reply.
+.TP
+.I set mailhelo localhost.localdomain
+The client identification sent to the mailserver with the SMTP HELO command.
 .TP
 .I set subject tenshi report
 The subject of report emails, the queue name is always automatically appended.
@@ -559,5 +562,5 @@ It should be noted that tenshi was initially a perl rewrite of
 
 .SH AUTHORS
 
-Copyright 2004-2012 Andrea Barisani <andrea@inversepath.com>
+Copyright 2004-2014 Andrea Barisani <andrea@inversepath.com>
 

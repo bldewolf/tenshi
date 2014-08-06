@@ -1,3 +1,14 @@
+0.15                                                    (20140804)
+
+- added mailhelo option for friendlier SMTP connections
+        Christian Zuckschwerdt <christian@zuckschwerdt.org>
+- add missing dataend just before quitting the SMTP connection
+        Florian Pritz <bluewind@xinu.at>
+- fix stderr leak
+        Brian De Wolf <bldewolf@csupomona.edu>
+- fix erroneous 'no readable log files' error when in listen mode
+        Bethany Long <Bethany.Long@wwu.edu>
+
 0.14                                                    (20120603)
 
 - cleaned up tail invocation code, fixed repeat handling, gentoo init script update

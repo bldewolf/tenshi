@@ -11,7 +11,7 @@
 #  to define things once, and have to change things in only one place.
 #--------------------------------------------------------------------------------
 %define name       tenshi
-%define version    0.14
+%define version    0.15
 %define release    1
 %define mandir     /usr/share/man
 %define docdir     /usr/share/doc/packages

@@ -1,9 +1,9 @@
 #!/usr/bin/perl
 #
-# tenshi 0.14 2012/06/03
+# tenshi 0.15 2014/08/04
 # <tenshi@inversepath.com>
 #
-# Copyright 2004-2012 Andrea Barisani <andrea@inversepath.com>
+# Copyright 2004-2014 Andrea Barisani <andrea@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -33,7 +33,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.14';
+my $version = '0.15';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -56,7 +56,7 @@ my $saved_pid      = 0;
 
 my $config_reinit  = 1;
 
-my ($mailserver, $limit, $pager_limit, $hidepid, $status, $listen, $resolve);
+my ($mailserver, $mailhelo, $limit, $pager_limit, $hidepid, $status, $listen, $resolve);
 my (%main, %last_match, %last_queue, %filter_file, %filter_args, %hostnames, %regexp_matches);
 my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die);
 my (@log_files, @fifo_files, @log_prefix, @regexp, @queues, @skip, @group_stack, @queues_escalation);
@@ -154,7 +154,7 @@ if (!$profile) {
         push @readable_log_files, $log;
     }
 
-    @readable_log_files > 0 || @fifo_files > 0
+    @readable_log_files > 0 || @fifo_files > 0 || $listen
         or clean_up and die RED "[ERROR] no readable log files";
 
     @log_files = @readable_log_files;
@@ -420,6 +420,7 @@ sub config_read {
         elsif (/^set\s+limit\s+(\d+)/)             { $limit           = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+subject\s+(.+)/)            { $subject         = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+mailserver\s+(.+)/)         { $mailserver      = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+mailhelo\s+(.+)/)           { $mailhelo        = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+pager_limit\s+(\d+)/)       { $pager_limit     = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+mailtimeout\s+(\d+)/)       { $mailtimeout     = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+filter\s+(\S+)\s+(\S+)\s*(\S+.*)?/) {
@@ -873,7 +874,7 @@ sub queue_mail {
 
     return unless (scalar(@lines) > 0);
 
-    my $smtp = Net::SMTP->new($mailserver, Timeout => $mailtimeout, Debug => $debug_smtp);
+    my $smtp = Net::SMTP->new($mailserver, Hello => $mailhelo, Timeout => $mailtimeout, Debug => $debug_smtp);
 
     if (!$smtp) {
         print RED "[ERROR] could not contact $mailserver:25\n";
@@ -910,6 +911,7 @@ sub queue_mail {
 
     $smtp->datasend("Subject: $subject [$queue]\n\n");
     $smtp->datasend(@lines);
+    $smtp->dataend();
     $smtp->quit;
     $main{$queue}{'logs'} = {};
 }
@@ -1197,7 +1199,7 @@ sub debug {
 
 sub usage {
    die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2012                Andrea Barisani || <andrea\@inversepath.com>\n
+Copyright 2004-2014                Andrea Barisani || <andrea\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax
