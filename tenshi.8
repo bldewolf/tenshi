@@ -3,7 +3,7 @@
 .\" LP paragraph
 .\" IP indented paragraph
 .\" TP hanging label
-.TH "tenshi" 8 "04 Aug 2014" "version 0.15"
+.TH "tenshi" 8 "17 Aug 2017" "version 0.16"
 .SH NAME
 tenshi - Log Monitoring and Reporting tool
 .SH SYNOPSIS
@@ -96,17 +96,16 @@ for details.
 .I STATIC OPTIONS
 
 .br
-These options will be read the first time tenshi reads its config file. They
+These options will be set the first time tenshi reads its config file. They
 cannot be changed by re-reading the config file. If you change one of these
 options and HUP tenshi it will die. You have been warned.
 
 .TP
 .I set uid tenshi
 Specify the effective user ID of the process when in daemon mode. The user must
-be able to read the selected log files, the configuration file and write the
-specified pid file. Never use privileged users here since it's not usually
-necessary (log files perms can be set accordingly with most syslog
-implementations).
+be able to read the selected log files and the configuration file. Using a
+privileged user is discouraged as it is not usually necessary (log files
+permissions can be set accordingly with most syslog implementations).
 .TP
 .I set gid tenshi
 Specify the effective group ID of the process when in daemon mode.
@@ -121,8 +120,10 @@ one log file. Depending on your tail implementation you might need to use the
 .I tail_multiple
 setting for multiple files to work. This mode can be used along with
 .I fifo
-and
+,
 .I listen
+and
+.I redisqueue
 settings.
 .TP
 .I set tail /usr/bin/tail -q --follow=name --retry -n 0
@@ -132,8 +133,8 @@ GNU coreutils tail. The
 .I --follow=name
 and
 .I --retry
-flags should deal properly with log rotation, if missing on your implementation we suggest that you use
-something like 'cp /dev/null logfile' as a safe way for clearing the log file upon rotation.
+flags should deal properly with log rotation, if missing on your implementation we suggest that
+you use 'cp /dev/null logfile', or similar techniques, as a safe way to clear the log file upon rotation.
 .TP
 .I set tail_multiple <on|off>
 Some tail implementations do not handle more than one log file. When this option is enabled multiple
@@ -148,19 +149,42 @@ specified multiple times to watch more than one fifo file. This option is meant 
 only when the installed 'tail' binary doesn't behave properly with FIFOs, please
 test your tail implementation before using this. This mode can be used along with
 .I logfile
-and
+,
 .I listen
+and
+.I redisqueue
 settings.
 .TP
 .I set listen 0.0.0.0:514
 Enables syslog server mode. With this option tenshi will bind to the specified address:port
 pair and read messages acting like a syslog server. We always recommend to filter the port
-accordingly and possibly use something like stunnel for encrypting the traffic. This mode can
+accordingly and possibly stunnel, or similar wrappers, to encrypt the traffic. This mode can
 be used along with
 .I logfile
-and
+,
 .I fifo
+and
+.I redisqueue
 settings.
+.TP
+.I set redisqueue <queue name>
+Enables monitoring of logs consumed from a Redis queue of the given name, this may be specified
+multiple times. See
+.I redisserver
+setting for instance specification. This mode can
+be used along with
+.I logfile
+,
+.I fifo
+and
+.I listen
+settings.
+.TP
+.I set redisserver 127.0.0.1:6379
+Specify the server path for the Redis instance to be used by the
+.I redisqueue
+setting. The parameter is passed to the new() method of the perl Redis binding, please refer to
+its manual for accepted values. The setting typically accepts an address:port pair or socket path.
 .LP
 
 .I DYNAMIC OPTIONS
@@ -509,20 +533,32 @@ See the included tenshi.conf.
 
 .SH REQUIREMENTS
 
-tenshi needs a working 'tail' implementation when not using FIFO mode.
+- Perl.
 .br
 
-It also requires Net::SMTP module for mailing reports, which should be included
-in your perl installation, and IO::BufferedSelect. If you miss any of them you
-can grab them at CPAN (http://www.cpan.org) or using the CPAN shell (`perl -e
-shell -MCPAN`).
+- A working 'tail' implementation, when using the
+.I logfile
+option.
+.br
+
+- The Net::SMTP perl module to mail reports, typically included
+in perl installations.
+
+- The IO::BufferedSelect perl module.
+
+- The Redis perl module, when using the
+.I redisqueue
+option.
+
+Any missing module can be downloaded from CPAN (http://www.cpan.org) or installed
+using the CPAN shell (`perl -e shell -MCPAN`).
 
 .SH BUGS
-Double quotation characters present in your logs might break csv output (depending on how you pipe/process
+Double quote characters present in your logs might break csv output (depending on how you pipe/process
 it in the filter) since there's no escape code (yet).
 
 Please report any bugs you find at
-.BI <tenshi@inversepath.com>
+.BI <andrea@inversepath.com>
 
 .SH LICENSE
 .B tenshi
@@ -542,15 +578,14 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 .SH DISTRIBUTION
 
-The tenshi project page is
-.BI http://www.inversepath.com/tenshi.html
+The tenshi repository is hosted at
+.BI https://github.com/inversepath/tenshi
 
 .SH NOTES
 
 tenshi was once known as
-.I wasabi
-but the name was changed as we were informed that wasabi is a registered a
-trademark relating to another piece of software.
+.I wasabi.
+The name was changed due to a trademark claim relating to another piece of software.
 
 .SH SEE ALSO
 
@@ -562,5 +597,5 @@ It should be noted that tenshi was initially a perl rewrite of
 
 .SH AUTHORS
 
-Copyright 2004-2014 Andrea Barisani <andrea@inversepath.com>
+Copyright 2004-2017 Andrea Barisani <andrea@inversepath.com>
 

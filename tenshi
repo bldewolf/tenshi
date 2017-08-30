@@ -1,9 +1,7 @@
 #!/usr/bin/perl
 #
-# tenshi 0.15 2014/08/04
-# <tenshi@inversepath.com>
-#
-# Copyright 2004-2014 Andrea Barisani <andrea@inversepath.com>
+# tenshi 0.16 2017/08/17
+# Copyright 2004-2017 Andrea Barisani <andrea@inversepath.com>
 #
 # Permission to use, copy, modify, and distribute this software for any
 # purpose with or without fee is hereby granted, provided that the above
@@ -33,7 +31,7 @@ setlocale(LC_TIME, "C");
 File::Temp->safe_level(File::Temp::HIGH);
 $Term::ANSIColor::AUTORESET = 1;
 
-my $version = '0.15';
+my $version = '0.16';
 
 my %opts;
 GetOptions('configuration=s' => \$opts{'c'}, 'Check'      => \$opts{'C'},
@@ -52,7 +50,6 @@ my $last_minute    = 0;
 my $sleep          = 5;
 my $mailtimeout    = 10;
 my $select_timeout = 1;
-my $saved_pid      = 0;
 
 my $config_reinit  = 1;
 
@@ -60,6 +57,7 @@ my ($mailserver, $mailhelo, $limit, $pager_limit, $hidepid, $status, $listen, $r
 my (%main, %last_match, %last_queue, %filter_file, %filter_args, %hostnames, %regexp_matches);
 my ($config_read, $queue_flush_needed, $queue_check_needed, $time_to_die);
 my (@log_files, @fifo_files, @log_prefix, @regexp, @queues, @skip, @group_stack, @queues_escalation);
+my (@redis_queues, $redisserver, $redis);
 my ($syslog_sender, $syslog_listen_socket);
 
 my $profile     = $opts{'p'} || 0;
@@ -73,7 +71,7 @@ $debug      = (defined($opts{'d'}) && $opts{'d'} == 0) ? 1 : $opts{'d'} || 0;
 $debug_smtp = ($debug > 1) ? 1 : 0;
 
 my $tail_file = '/usr/bin/tail';
-my $tail_args = '-q --follow=name --retry -n 0';
+my $tail_args = '-q -F -n 0';
 my $tail_multiple = 'off';
 my @tail_pids;
 
@@ -122,8 +120,6 @@ if ($listen) {
 
 $SIG{'CHLD'} = sub { $debug && debug(5,'CHLD') ; print RED "[ERROR] child died, bailing out\n"; $time_to_die = 1; };
 
-prepare_process();
-
 #
 # sanity checks
 #
@@ -131,12 +127,17 @@ prepare_process();
 if (!$profile) {
     foreach my $queue (@queues) {
         if ($filter_file{$queue} and ! -x $filter_file{$queue}) {
-            clean_up and die RED "[ERROR] $filter_file{$queue}: not executable";
+            clean_up and die RED "[ERROR] $filter_file{$queue}: not executable\n";
         }
     }
 
     if ($main{'csv'} and ! -x $main{'csv'}{'path'}) {
-        clean_up and die RED "[ERROR] $main{'csv'}{'path'}: not executable";
+        clean_up and die RED "[ERROR] $main{'csv'}{'path'}: not executable\n";
+    }
+
+    if (scalar(@redis_queues) > 0) {
+        $debug && debug(23, 'testing Redis module availability');
+        require Redis;
     }
 
     my @readable_log_files;
@@ -154,8 +155,8 @@ if (!$profile) {
         push @readable_log_files, $log;
     }
 
-    @readable_log_files > 0 || @fifo_files > 0 || $listen
-        or clean_up and die RED "[ERROR] no readable log files";
+    @readable_log_files > 0 || @fifo_files > 0 || @redis_queues > 0 || $listen
+        or clean_up and die RED "[ERROR] no readable log files\n";
 
     @log_files = @readable_log_files;
 }
@@ -211,9 +212,23 @@ if ($profile) {
             push @fhs, $fh;
         }
     }
+
+    if (scalar(@redis_queues) > 0) {
+        $debug && debug(23, 'opening Redis connection');
+
+        if (defined $redisserver) {
+            $redis = Redis->new(server => $redisserver);
+        } else {
+            $redis = Redis->new;
+        }
+
+        $redis->ping || die RED "[ERROR] could not open connection to redis on $redisserver: $!\n";
+
+        $debug && debug(23, "created redis socket $redis");
+    }
 }
 
-if (scalar(@fhs) < 1) {
+unless (scalar(@fhs) > 0 or scalar(@redis_queues) > 0) {
     clean_up and die RED "[ERROR] no log file has been specified\n";
 }
 
@@ -238,10 +253,9 @@ if (!($debug || $profile || $foreground)) {
     daemonize();
 }
 
-save_pid();
-
 while (!$time_to_die) {
     my $now = time;
+    my ($fh, $line);
 
     if ($now > ($last_check + $sleep)) {
         $queue_check_needed = 1;
@@ -255,7 +269,7 @@ while (!$time_to_die) {
     my @ready = $bs->read_line($select_timeout);
 
     foreach (@ready) {
-        my ($fh, $line) = @$_;
+        ($fh, $line) = @$_;
 
         if ($listen and $fh == $syslog_listen_socket) {
             $line =~ s/^<\d+>//;
@@ -267,8 +281,8 @@ while (!$time_to_die) {
                     $hostnames{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
                 }
 
-            my $time = strftime "%b %e %H:%M:%S", localtime;
-            $line = sprintf("%s %s %s", $time, $hostnames{$ipaddr}, $line);
+                my $time = strftime "%b %e %H:%M:%S", localtime;
+                $line = sprintf("%s %s %s", $time, $hostnames{$ipaddr}, $line);
             }
         }
 
@@ -276,6 +290,16 @@ while (!$time_to_die) {
 
         parse_line($line);
     }
+
+    foreach my $redis_queue (@redis_queues) {
+        while($redis->llen($redis_queue) > 0) {
+            $line = $redis->lpop($redis_queue);
+            parse_line($line);
+        }
+    }
+
+    # throttle down loop on void reads
+    unless ($line) { sleep(1) };
 }
 
 queues_flush();
@@ -346,6 +370,14 @@ sub config_read {
                 $debug && debug(1,$_);
             }
             push @log_files, $1;
+        }
+        elsif (/^set\s+redisqueue\s+(\S+)/) {
+            if ($config_read and (!grep(/^$1$/, @redis_queues))) {
+                clean_up and die debug(100,'redisqueue');
+            } elsif (!$config_read) {
+                $debug && debug(1, $_);
+            }
+            push @redis_queues, $1;
         }
         elsif (/^set\s+fifo\s+(\S+)/) {
             if ($config_read and (!grep(/^$1$/, @fifo_files))) {
@@ -423,6 +455,7 @@ sub config_read {
         elsif (/^set\s+mailhelo\s+(.+)/)           { $mailhelo        = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+pager_limit\s+(\d+)/)       { $pager_limit     = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+mailtimeout\s+(\d+)/)       { $mailtimeout     = $1; $debug && debug(1,$_); next; }
+        elsif (/^set\s+redisserver\s+(.+)/)        { $redisserver     = $1; $debug && debug(1,$_); next; }
         elsif (/^set\s+filter\s+(\S+)\s+(\S+)\s*(\S+.*)?/) {
             $filter_file{$1} = $2;
             $filter_args{$1} = $3 || "";
@@ -608,6 +641,7 @@ sub parse_line {
         my $has_prefix;
 
         chomp($line); $debug && debug(6,$line);
+
         foreach my $log_prefix (@log_prefix) {
             if ($line =~ s/$log_prefix//) {
                 $has_prefix = 1;
@@ -625,7 +659,6 @@ sub parse_line {
         if ($hidepid) { $line =~ s/^(\S+)\[\d+\]: /$1: /o; }
 
         for (my $index = 0; $index <= $#regexp; $index++) {
-
             my $regexp = $regexp[$index];
             my $queue  = $queues[$index];
             my $queue_escalation = $queues_escalation[$index];
@@ -722,6 +755,7 @@ sub parse_line {
 
 sub queue_is_builtin {
     my $queue = shift;
+
     if (($queue eq 'trash') or ($queue eq 'repeat') or ($queue eq 'group') or ($queue eq 'group_host')) {
         return 1;
     }
@@ -750,7 +784,6 @@ sub queues_check {
         next if queue_is_builtin($queue);
 
         if ($main{$queue}{'now'} || ($check_crons && cron_mask_match(\@time, $main{$queue}{'cron_mask'}))) {
-
             if ($queue eq 'csv') {
                 csv_out();
                 next;
@@ -782,7 +815,7 @@ sub queue_mail {
     my @lines;
 
     # evaluate threshold first to prevent report if none of the lines appeared often enough
-    if($main{$queue}{'threshold'}) {
+    if ($main{$queue}{'threshold'}) {
         my @t = @{$main{$queue}{'threshold'}};
 
         foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
@@ -795,8 +828,10 @@ sub queue_mail {
                     }
                 }
             }
+
             delete $main{$queue}{'logs'}{$hostname} unless(keys %{$main{$queue}{'logs'}{$hostname}});
         }
+
         delete $main{$queue}{'logs'} unless(keys %{$main{$queue}{'logs'}});
     }
 
@@ -810,15 +845,20 @@ sub queue_mail {
     if ($status and (!$main{$queue}{'pager'})) {
         print $tmp "*** Status: $status ***\n";
     }
-    foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
 
+    foreach my $hostname (keys %{$main{$queue}{'logs'}}) {
         my $index = 0;
+
         next unless (keys %{$main{$queue}{'logs'}{$hostname}});
 
         if ($resolve && !$main{$queue}{'pager'}) {
             my $ipaddr = inet_aton($hostname);
-            $hostnames{$ipaddr} = gethostbyaddr($ipaddr, AF_INET) if($ipaddr && !defined $hostnames{$ipaddr});
-            if(defined $ipaddr && defined $hostnames{$ipaddr}) {
+
+            if ($ipaddr && !defined $hostnames{$ipaddr}) {
+                $hostnames{$ipaddr} = gethostbyaddr($ipaddr, AF_INET);
+            }
+
+            if (defined $ipaddr && defined $hostnames{$ipaddr}) {
                 print $tmp "\n$hostname ($hostnames{$ipaddr}): \n";
             } else {
                 print $tmp "\n$hostname: \n";
@@ -828,6 +868,7 @@ sub queue_mail {
         }
 
         my @sorted_keys;
+
         if ($sort_order eq 'descending') {
             @sorted_keys = reverse sort { $main{$queue}{'logs'}{$hostname}{$a} <=> $main{$queue}{'logs'}{$hostname}{$b} } keys %{$main{$queue}{'logs'}{$hostname}};
         } elsif ($sort_order eq 'ascending') {
@@ -835,7 +876,6 @@ sub queue_mail {
         }
 
         foreach my $key (@sorted_keys) {
-
             if ($main{$queue}{'pager'}) {
                 last if ($pager_limit and ($index >= $pager_limit));
                 print $tmp "$hostname,$main{$queue}{'logs'}{$hostname}{$key},$key\n";
@@ -904,6 +944,7 @@ sub queue_mail {
 
     if (!$main{$queue}{'now'}) {
         my @now = localtime();
+
         $main{$queue}{'report_time'} = [ @startup_time ] if (!$main{$queue}{'report_time'});
         $smtp->datasend("X-tenshi-report-start: " . strftime("%a %b %d %H:%M:%S $timezone %Y", @{$main{$queue}{'report_time'}}) . "\n");
         $main{$queue}{'report_time'} = [ @now ];
@@ -923,6 +964,7 @@ sub csv_out {
 
     if (!$main{'csv'}{'now'}) {
         my @now = localtime();
+
         $main{'csv'}{'report_time'} = [ @startup_time ] if (!$main{'csv'}{'report_time'});
         $main{'csv'}{'report_time'} = [ @now ];
     }
@@ -932,8 +974,8 @@ sub csv_out {
     $debug && debug(19,$tmp);
 
     foreach my $hostname (keys %{$main{'csv'}{'logs'}}) {
-
         my $index = 0;
+
         next unless (keys %{$main{'csv'}{'logs'}{$hostname}});
 
         my @sorted_keys = sort { $main{'csv'}{'logs'}{$hostname}{$a} <=> $main{'csv'}{'logs'}{$hostname}{$b} } keys %{$main{'csv'}{'logs'}{$hostname}};
@@ -976,19 +1018,19 @@ sub daemonize {
     defined(my $pid = fork)     or clean_up and die RED "[ERROR] can't fork: $!\n";
     exit if $pid;
     setsid()                    or clean_up and die RED "[ERROR] can't start a new session: $!\n";
+    save_pid();
+    prepare_process();
 }
 
 sub save_pid {
     open (PIDFILE,">$pid_file") or clean_up and die RED "[ERROR] could not open pid file $pid_file: $!\n";
     print PIDFILE $$; $debug && debug(4,$$);
     close PIDFILE;
-    $saved_pid = 1;
 }
 
 sub clean_up {
     my $save = $!; # preserve $! for the call to die
     local $SIG{CHLD} = 'IGNORE';
-    unlink $pid_file if $saved_pid;
 
     if (scalar(@tail_pids) > 0) {
       $debug && debug(21, join(' ', @tail_pids));
@@ -1001,6 +1043,9 @@ sub clean_up {
             $syslog_listen_socket->close();
         }
     }
+
+    $redis->quit if (defined $redis);
+
     $! = $save;
     return 1;
 }
@@ -1027,7 +1072,6 @@ sub cron_field_resolve {
 
 sub cron_spec_to_mask {
     my $string = shift;
-
     my @mask;
 
     for (my $i = 0; $i < scalar(@cron_specs); $i++) {
@@ -1134,7 +1178,7 @@ sub debug {
     $debug_msg{'2'}{'msg'}  = "[CONF]  configuration file $_[1] successfully parsed\n";
     $debug_msg{'2'}{'col'}  = WHITE;
 
-    $debug_msg{'3'}{'msg'}  = "[INIT]  entering tail loop\n";
+    $debug_msg{'3'}{'msg'}  = "[INIT]  entering monitoring loop\n";
     $debug_msg{'3'}{'col'}  = BLUE;
 
     $debug_msg{'4'}{'msg'}  = "[INIT]  saving pid $$ in $pid_file\n";
@@ -1191,6 +1235,9 @@ sub debug {
     $debug_msg{'22'}{'msg'} = "[REGEX] repeat queue matched without capturing number of lines repeated; skipping\n";
     $debug_msg{'22'}{'col'} = RED;
 
+    $debug_msg{'23'}{'msg'} = "[REDIS] $_[1]\n";
+    $debug_msg{'23'}{'col'} = RED;
+
     $debug_msg{'100'}{'msg'} = "[ERROR] tried to change a protected setting: $_[1], please restart tenshi for this change to take effect\n";
     $debug_msg{'100'}{'col'} = RED;
 
@@ -1198,8 +1245,8 @@ sub debug {
 }
 
 sub usage {
-   die "tenshi $version      http://dev.inversepath.com/tenshi || <tenshi\@inversepath.com>
-Copyright 2004-2014                Andrea Barisani || <andrea\@inversepath.com>\n
+   die "tenshi $version                              https://github.com/inversepath/tenshi
+Copyright 2004-2017                Andrea Barisani || <andrea\@inversepath.com>\n
 Usage: $0 [-c <conf file>] [-C|-f|-p] [-d <debug level>] [-P <pid file>]
    -c configuration file
    -C test configuration syntax
